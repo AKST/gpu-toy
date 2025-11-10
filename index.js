@@ -2,7 +2,7 @@
  * @param {URL} url
  */
 export function loadApp({ searchParams }) {
-  const app = searchParams.get('example');
+  const app = searchParams.get('example') ?? 'learn-001.html';
   const iframe = document.querySelector('iframe');
   console.log(app);
   iframe.src = `./examples/${app}`;
