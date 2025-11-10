@@ -7,14 +7,22 @@
   <style>
     * { box-sizing: border-box; }
     iframe { border: none; }
-    body, html { margin: 0; padding: 0 };
+    body, html { margin: 0; padding: 0 }
     body {
       display: grid;
       grid-template-rows: auto 1fr auto;
       grid-template-columns: auto 1fr;
+      max-height: 100dvh;
     }
-    header, footer {
-      padding-inline: 12px;
+    header {
+      display: grid;
+      grid-template-columns: auto auto;
+      justify-content: space-between;
+      align-items: center;
+
+    }
+    nav, header, footer {
+      padding-inline: 32px;
     }
 
     header, footer { grid-column: 1 / 3; }
@@ -24,16 +32,19 @@
     main {
       display: flex;
       justify-content: center;
-      align-items: center
+      align-items: center;
+      max-height: 100%;
+      overflow: scroll;
     }
   </style>
 </head>
 <body>
   <header>
     <h1>GPU Toy</h1>
+    <x-attribution id="attribution"/>
   </header>
   <nav>
-    <h2>Navigation</h2>
+    <h2>Examples</h2>
     <ul>
       <li><a href="?example=learn-001.html">Example 1</a></li>
       <li><a href="?example=learn-002.html">Example 2</a></li>
@@ -45,6 +56,9 @@
   <footer>
   </footer>
   <script type="module" src="./index.js"></script>
+  <script type="module">
+    import "./common/components/x-attribution.js";
+  </script>
 </body>
 </html>
 

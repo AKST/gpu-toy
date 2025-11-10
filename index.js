@@ -3,9 +3,10 @@
  */
 export function loadApp({ searchParams }) {
   const app = searchParams.get('example') ?? 'learn-001.html';
+  const attr = document.querySelector('#attribution');
   const iframe = document.querySelector('iframe');
-  console.log(app);
   iframe.src = `./examples/${app}`;
+  attr.flush?.();
 }
 
 globalThis.addEventListener('click', event => {
@@ -20,9 +21,10 @@ globalThis.addEventListener('click', event => {
 
 globalThis.addEventListener('message', event => {
   const message = event.data;
-  console.log(message);
+  const attr = document.querySelector('#attribution');
   switch (message.kind) {
     case 'attribute':
+      attr.setAttribution(message.title, message.link)
       break;
     default:
       break;
