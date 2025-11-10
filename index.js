@@ -18,4 +18,15 @@ globalThis.addEventListener('click', event => {
   }
 });
 
+globalThis.addEventListener('message', event => {
+  const message = event.data;
+  console.log(message);
+  switch (message.kind) {
+    case 'attribute':
+      break;
+    default:
+      break;
+  }
+});
+
 loadApp(new URL(globalThis.location.href));

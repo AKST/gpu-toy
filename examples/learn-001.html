@@ -13,6 +13,12 @@
     const context = canvas.getContext('webgpu');
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
 
+    window.parent?.postMessage({
+      kind: 'attribute',
+      title: 'W3 WegGPU Samples',
+      link: 'https://webgpu.github.io/webgpu-samples/?sample=helloTriangle',
+    });
+
     context.configure({
       device,
       format: presentationFormat,
