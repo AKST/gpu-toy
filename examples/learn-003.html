@@ -52,7 +52,7 @@
         device,
         shaderModule,
         commandEncoder,
-        bindGroup: 1,
+        bindGroup: 0,
         workGroups: Math.ceil(size / 64),
         entryPoint: 'step2',
         entries: [
@@ -206,12 +206,12 @@
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-      technology[idx] = 1.0 + phoneUsage[idx] * prevTechnology[idx];
+      technology[idx] = phoneUsage[idx] * prevTechnology[idx];
     }
 
 
-    @group(1) @binding(0) var<storage, read> technologyInput: array<f32>;
-    @group(1) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
+    @group(0) @binding(0) var<storage, read> technologyInput: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
