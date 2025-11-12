@@ -7,7 +7,7 @@
  *
  * @param {string} text
  * @param {RowDefinition[]} headers
- * @returns {Frame}
+ * @returns {[number, Frame]}
  */
 export function processCsv(text, headers) {
   const cleanCell = s => s?.replace(/\"/g, '');
@@ -46,14 +46,15 @@ export function processCsv(text, headers) {
     }
   }
 
-  // Convert number arrays to Float64Array
+  let size = 0;
   for (const [key, { type }] of Object.entries(columnIndices)) {
+    size = result[key].length;
     if (type === 'number') {
       result[key] = new Float64Array(result[key]);
     }
   }
 
-  return result;
+  return [size, result];
 }
 
 /**
@@ -127,4 +128,14 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
     groups: groupOffsets,
     groupValues,
   };
+}
+
+/**
+ * @param {Frame} frame
+ * @param {string} a
+ * @param {string} b
+ */
+export function renameColumn(frame, a, b) {
+  frame[b] = frame[a];
+  delete frame[a];
 }

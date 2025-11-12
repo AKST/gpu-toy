@@ -8,18 +8,45 @@
 </head>
 <body>
   <script type="module">
-    import { sortAndIdentifyGroups, processCsv } from '../common/data/csv.js';
+    import * as csv from '../common/data/csv.js';
     import { ituCellPhones } from '../common/data/datasets.js';
 
     try {
-      const response = await fetch(ituCellPhones.url);
-      const text = await response.text();
-      const df = processCsv(text, ituCellPhones.headers);
-      const groups = sortAndIdentifyGroups('countryId', 'year', df);
-
-      console.log('Ordered and grouped data:', groups);
+      const [groups, df] = await setupData();
+      console.log('Ordered and grouped data:', groups, df);
     } catch (e) {
       console.error(e);
+    }
+
+    /**
+     * Setup data for processing
+     */
+    async function setupData() {
+      const response = await fetch(ituCellPhones.url);
+      const text = await response.text();
+
+      const [size, df] = csv.processCsv(text, ituCellPhones.headers);
+      csv.renameColumn(df, 'value', 'phoneUsage');
+      const groups = csv.sortAndIdentifyGroups('countryId', 'year', df);
+
+      // Exogenous, will populate later
+      df.labour = new Float64Array(size);
+
+      for (let i = 0; i < size; i++) {
+        df.labour[i] = 1;
+      }
+
+      // Computed in first step
+      df.technology = new Float64Array(size);
+
+      // Computed in second step
+      df.capitalSteadyState = new Float64Array(size);
+
+      // Computed in third step
+      df.capital = new Float64Array(size);
+      df.output = new Float64Array(size);
+
+      return [groups, df];
     }
   </script>
   <template id="about">

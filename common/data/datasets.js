@@ -9,7 +9,7 @@ export const ituCellPhones = {
     { name: 'entityID', type: 'string', rename: 'countryId' },
     { name: 'entityIso', type: 'string', rename: 'countryIso' },
     { name: 'entityName', type: 'string', rename: 'countryName' },
-    { name: 'dataValue', type: 'string', rename: 'value' },
+    { name: 'dataValue', type: 'number', rename: 'value' },
     { name: 'dataYear', type: 'number', rename: 'year' },
     { name: 'dataNote', type: 'string', drop: true },
     { name: 'dataSource', type: 'string', drop: true },
