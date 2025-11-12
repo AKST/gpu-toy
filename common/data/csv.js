@@ -6,12 +6,13 @@
  * Returns a record with series for each column.
  *
  * @param {string} text
- * @param {RowDefinition[]} headers
- * @returns {[number, Frame]}
+ * @param {{ headers: RowDefinition[] }} cfg
+ * @returns {{ size: number, df: Frame }}
  */
-export function processCsv(text, headers) {
+export function processCsv(text, { headers, dropRows = 0 }) {
   const cleanCell = s => s?.replace(/\"/g, '');
-  const lines = text.trim().split('\n');
+  const lines = text.trim().split('\n').slice(dropRows);
+  console.log(lines[0])
   const csvHeaders = lines[0].split(',').map(cleanCell);
   console.log(csvHeaders);
 
@@ -54,7 +55,7 @@ export function processCsv(text, headers) {
     }
   }
 
-  return [size, result];
+  return { size, df: result };
 }
 
 /**

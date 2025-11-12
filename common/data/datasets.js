@@ -16,3 +16,24 @@ export const ituCellPhones = {
     { name: 'seriesDescription', type: 'string', drop: true },
   ],
 };
+
+const wbYears = Array.from({ length: 2024 - 1960 }, (_, i) => 1960+i);
+
+export const wbPopulation = {
+  url: '../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv',
+  dropRows: 4,
+  headers: {
+    load: [
+      { name: 'Country Name', type: 'string', drop: true },
+      { name: 'Country Code', type: 'string', rename: 'countryIso' },
+      { name: 'Indicator Name', type: 'string', drop: true },
+      { name: 'Indicator Code', type: 'string', drop: true },
+      ...wbYears.map(year => ({ name: `${year}`, type: 'number' })),
+    ],
+    long: {
+      retain: ['countryIso'],
+      columnValue: 'population',
+      columnKey: 'year',
+    },
+  },
+};

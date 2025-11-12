@@ -5,8 +5,8 @@ export function loadApp({ searchParams }) {
   const app = searchParams.get('example') ?? 'learn-001.html';
   const attr = document.querySelector('#attribution');
   const iframe = document.querySelector('iframe');
-  iframe.src = `./examples/${app}`;
   attr.flush?.();
+  iframe.src = `./examples/${app}`;
 }
 
 globalThis.addEventListener('click', event => {
@@ -31,4 +31,5 @@ globalThis.addEventListener('message', event => {
   }
 });
 
+console.clear();
 loadApp(new URL(globalThis.location.href));

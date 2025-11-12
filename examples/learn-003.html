@@ -9,44 +9,176 @@
 <body>
   <script type="module">
     import * as csv from '../common/data/csv.js';
-    import { ituCellPhones } from '../common/data/datasets.js';
+    import { wbPopulation, ituCellPhones } from '../common/data/datasets.js';
+    import { initWebGPU } from '../common/init.js';
 
     try {
-      const [groups, df] = await setupData();
+      const [size, groups, df] = await setupData();
+      const { canvas, adapter, device } = await initWebGPU();
+
+      const bufferSize = size * Float32Array.BYTES_PER_ELEMENT;
+      const phoneUsageBuffer = createBuffer(device, df.phoneUsage);
+      const prevTechnologyBuffer = createBuffer(device, df.initialTech);
+      const technologyBuffer = createBuffer(device, df.technology);
+      const capitalSteadyStateBuffer = createBuffer(device, df.capitalSteadyState);
+
+      // Staging buffer for reading results back
+      const stagingBuffer = device.createBuffer({
+        size: bufferSize,
+        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+      });
+
+      // Create shader modules
+      const shader1Code = document.getElementById('shader-1').textContent;
+      const shader2Code = document.getElementById('shader-2').textContent;
+      const shader1Module = device.createShaderModule({ code: shader1Code });
+      const shader2Module = device.createShaderModule({ code: shader2Code });
+
+      // Create compute pipelines
+      const pipeline1 = device.createComputePipeline({
+        layout: 'auto',
+        compute: {
+          module: shader1Module,
+          entryPoint: 'main',
+        },
+      });
+
+      const pipeline2 = device.createComputePipeline({
+        layout: 'auto',
+        compute: {
+          module: shader2Module,
+          entryPoint: 'main',
+        },
+      });
+
+      // Create bind groups
+      const bindGroup1 = device.createBindGroup({
+        layout: pipeline1.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: phoneUsageBuffer } },
+          { binding: 1, resource: { buffer: prevTechnologyBuffer } },
+          { binding: 2, resource: { buffer: technologyBuffer } },
+        ],
+      });
+
+      const bindGroup2 = device.createBindGroup({
+        layout: pipeline2.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: technologyBuffer } },
+          { binding: 1, resource: { buffer: capitalSteadyStateBuffer } },
+        ],
+      });
+
+      // Execute compute passes
+      const commandEncoder = device.createCommandEncoder();
+
+      // Pass 1: Sequential compute (for now, process all at once)
+      const pass1 = commandEncoder.beginComputePass();
+      pass1.setPipeline(pipeline1);
+      pass1.setBindGroup(0, bindGroup1);
+      pass1.dispatchWorkgroups(size); // 1 workgroup per data point
+      pass1.end();
+
+      // Pass 2: Parallel compute
+      const pass2 = commandEncoder.beginComputePass();
+      pass2.setPipeline(pipeline2);
+      pass2.setBindGroup(0, bindGroup2);
+      pass2.dispatchWorkgroups(Math.ceil(size / 64)); // 64 threads per workgroup
+      pass2.end();
+
+      // Copy results to staging buffer
+      commandEncoder.copyBufferToBuffer(
+        technologyBuffer, 0,
+        stagingBuffer, 0,
+        bufferSize
+      );
+
+      device.queue.submit([commandEncoder.finish()]);
+
+      // Read back technology results
+      await stagingBuffer.mapAsync(GPUMapMode.READ);
+      df.technology.set(new Float32Array(stagingBuffer.getMappedRange()));
+      stagingBuffer.unmap();
+
+      // Read back capitalSteadyState results
+      const commandEncoder2 = device.createCommandEncoder();
+      commandEncoder2.copyBufferToBuffer(
+        capitalSteadyStateBuffer, 0,
+        stagingBuffer, 0,
+        bufferSize
+      );
+      device.queue.submit([commandEncoder2.finish()]);
+
+      await stagingBuffer.mapAsync(GPUMapMode.READ);
+      df.capitalSteadyState.set(new Float32Array(stagingBuffer.getMappedRange()));
+      stagingBuffer.unmap();
+
       console.log('Ordered and grouped data:', groups, df);
+      console.log('Technology results:', df.technology.slice(0, 10));
+      console.log('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
     } catch (e) {
       console.error(e);
+    }
+
+    function createBuffer(device, data) {
+      const buffer = device.createBuffer({
+        size: data.length * data.constructor.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(buffer, 0, data);
+      return buffer;
     }
 
     /**
      * Setup data for processing
      */
     async function setupData() {
-      const response = await fetch(ituCellPhones.url);
-      const text = await response.text();
+      const [
+        wbPop,
+        ituPhone,
+      ] = await Promise.all([
+        (
+          fetch(wbPopulation.url)
+            .then(r => r.text())
+            .then(t => csv.processCsv(t, {
+              headers: wbPopulation.headers.load,
+              dropRows: wbPopulation.dropRows,
+            }))
+        ),
+        (
+          fetch(ituCellPhones.url)
+            .then(r => r.text())
+            .then(t => csv.processCsv(t, {
+              headers: ituCellPhones.headers
+            }))
+        ),
+      ]);
 
-      const [size, df] = csv.processCsv(text, ituCellPhones.headers);
-      csv.renameColumn(df, 'value', 'phoneUsage');
-      const groups = csv.sortAndIdentifyGroups('countryId', 'year', df);
+      const size = ituPhone.size;
+
+      csv.renameColumn(ituPhone.df, 'value', 'phoneUsage');
+      ituPhone.groups = csv.sortAndIdentifyGroups('countryId', 'year', ituPhone.df);
 
       // Exogenous, will populate later
-      df.labour = new Float64Array(size);
-
-      for (let i = 0; i < size; i++) {
-        df.labour[i] = 1;
-      }
+      ituPhone.df.labour = new Float64Array(size);
 
       // Computed in first step
-      df.technology = new Float64Array(size);
+      ituPhone.df.technology = new Float64Array(size);
+      ituPhone.df.initialTech = new Float64Array(size);
 
       // Computed in second step
-      df.capitalSteadyState = new Float64Array(size);
+      ituPhone.df.capitalSteadyState = new Float64Array(size);
 
       // Computed in third step
-      df.capital = new Float64Array(size);
-      df.output = new Float64Array(size);
+      ituPhone.df.capital = new Float64Array(size);
+      ituPhone.df.output = new Float64Array(size);
 
-      return [groups, df];
+      for (let i = 0; i < size; i++) {
+        ituPhone.df.labour[i] = 1;
+        ituPhone.df.initialTech[i] = 1;
+      }
+
+      return [size, ituPhone.groups, ituPhone.df];
     }
   </script>
   <template id="about">
@@ -81,5 +213,30 @@
       the identity of its inputs (although the first should multiply).
     </p>
   </template>
+  <script type="text/wgsl" id="shader-1">
+    @group(0) @binding(0) var<storage, read> phoneUsage: array<f32>;
+    @group(0) @binding(1) var<storage, read> prevTechnology: array<f32>;
+    @group(0) @binding(2) var<storage, read_write> technology: array<f32>;
+
+    @compute @workgroup_size(1)
+    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      let idx = global_id.x;
+
+      // For now: multiply phoneUsage * prevTechnology
+      technology[idx] = phoneUsage[idx] * prevTechnology[idx];
+    }
+  </script>
+  <script type="text/wgsl" id="shader-2">
+    @group(0) @binding(0) var<storage, read> technology: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
+
+    @compute @workgroup_size(64)
+    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      let idx = global_id.x;
+
+      // For now: identity (copy input to output)
+      capitalSteadyState[idx] = technology[idx];
+    }
+  </script>
 </body>
 </html>
