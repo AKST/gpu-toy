@@ -9,14 +9,15 @@
 <body>
   <script type="module">
     import * as csv from '../common/data/csv.js';
-    import { wbPopulation, ituCellPhones } from '../common/data/datasets.js';
+    import * as datasets from '../common/data/datasets.js';
     import { initWebGPU } from '../common/init.js';
+    import { UniformAdapter } from '../common/webgpu/uniforms.js';
 
-    const UNIFORM_INIT = {
-      alpha: 2/3,
-      saving: 0.4,
-      depreciation: 0.07,
-    };
+    const uniforms = UniformAdapter.create([
+      { size: 4, init: 2/3, name: 'alpha' },
+      { size: 4, init: 0.4, name: 'saving' },
+      { size: 4, init: 0.07, name: 'depreciation' },
+    ]);
 
     try {
       const [size, groups, df] = await setupData();
@@ -29,6 +30,7 @@
       const prevTechnologyBuffer = createBuffer(device, df.initialTech, COPY_DST);
       const technologyBuffer = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
       const capitalSteadyStateBuffer = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
+      const uniformBuffer = uniforms.createBuffer(device);
 
       const shaderCode = document.getElementById('compute-shader').textContent;
       const shaderModule = device.createShaderModule({ code: shaderCode });
@@ -38,7 +40,7 @@
         device,
         shaderModule,
         commandEncoder,
-        bindGroup: 0,
+        //uniforms: uniformBuffer,
         workGroups: size,
         entryPoint: 'step1',
         entries: [
@@ -52,7 +54,7 @@
         device,
         shaderModule,
         commandEncoder,
-        bindGroup: 0,
+        uniforms: uniformBuffer,
         workGroups: Math.ceil(size / 64),
         entryPoint: 'step2',
         entries: [
@@ -98,8 +100,8 @@
       shaderModule,
       entryPoint,
       entries,
-      bindGroup: bindGroupId,
       workGroups,
+      uniforms,
     }) {
       const pipeline = device.createComputePipeline({
         layout: 'auto',
@@ -110,17 +112,25 @@
       });
 
       const bindGroup = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(bindGroupId),
+        layout: pipeline.getBindGroupLayout(0),
         entries,
+      });
+
+      const bindGroupUniform = uniforms && device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(1),
+        entries: [{ binding: 0, resource: { buffer: uniforms } }],
       });
 
       const loadIntoPass = pass => {
         pass.setPipeline(pipeline);
-        pass.setBindGroup(bindGroupId, bindGroup);
+        pass.setBindGroup(0, bindGroup);
+        if (bindGroupUniform) {
+          pass.setBindGroup(1, bindGroupUniform);
+        }
         pass.dispatchWorkgroups(workGroups);
       };
 
-      return { loadIntoPass, pipeline, pipeline, bindGroupId };
+      return { loadIntoPass, pipeline, bindGroup, bindGroupUniform };
     }
 
     function createMapping(device, commandEncoder, buffer, out) {
@@ -150,69 +160,92 @@
      * Setup data for processing
      */
     async function setupData() {
-      const [
-        wbPop,
-        ituPhone,
-      ] = await Promise.all([
-        (
-          fetch(wbPopulation.url)
+      function loadWideData(cfg) {
+        return fetch(cfg.url)
             .then(r => r.text())
             .then(t => csv.processCsv(t, {
-              headers: wbPopulation.headers.load,
-              dropRows: wbPopulation.dropRows,
+              headers: cfg.headers.load,
+              dropRows: cfg.dropRows ?? 0,
             }))
-            .then(({ df }) => {
-              const { retain, colout } = wbPopulation.headers.long;
-              const out = csv.wideToLong(df, retain, colout);
-              return out.df;
+            .then(df => {
+              const { retain, colout } = cfg.headers.long;
+              return csv.wideToLong(df, retain, colout);
             })
             .then(df => csv.filter(df, 'year', y => y >= 2000))
-        ),
-        (
-          fetch(ituCellPhones.url)
-            .then(r => r.text())
-            .then(t => csv.processCsv(t, {
-              headers: ituCellPhones.headers
-            }))
-        ),
-      ]);
-
-      wbPop.groups = csv.sortAndIdentifyGroups('countryIso', 'year', wbPop.df);
-      ituPhone.groups = csv.sortAndIdentifyGroups('countryIso', 'year', ituPhone.df);
-
-      const size = ituPhone.size;
-      const join = csv.innerJoins([ituPhone.df, wbPop.df], ['countryIso', 'year']);
-      console.log(join.size, wbPop.size, ituPhone.size);
-
-      csv.renameColumn(ituPhone.df, 'value', 'phoneUsage');
-
-      // Exogenous, will populate later
-      ituPhone.df.labour = new Float64Array(size);
-
-      // Computed in first step
-      ituPhone.df.technology = new Float64Array(size);
-      ituPhone.df.initialTech = new Float64Array(size);
-
-      // Computed in second step
-      ituPhone.df.capitalSteadyState = new Float64Array(size);
-
-      // Computed in third step
-      ituPhone.df.capital = new Float64Array(size);
-      ituPhone.df.output = new Float64Array(size);
-
-      for (let i = 0; i < size; i++) {
-        ituPhone.df.labour[i] = 1;
-        ituPhone.df.initialTech[i] = 1_000_000;
       }
 
-      return [size, ituPhone.groups, ituPhone.df];
+      function loadLongData(cfg) {
+        return fetch(cfg.url)
+            .then(r => r.text())
+            .then(t => csv.processCsv(t, {
+              headers: cfg.headers,
+              dropRows: cfg.dropRows ?? 0,
+            }))
+      }
+
+      const [
+        ituPhone,
+        wbPop,
+        wbLabourForce,
+        wbUnemployment,
+        pwtStock,
+      ] = await Promise.all([
+        (
+          loadLongData(datasets.ituCellPhones)
+            .then(df => csv.filter(df, 'seriesCode', y => y === 'i271'))
+            .then(df => csv.dropColumn(df, 'seriesCode'))
+            .then(df => csv.renameColumn(df, 'value', 'phoneUsage'))
+        ),
+        loadWideData(datasets.wbPopulation),
+        loadWideData(datasets.wbLabourForce).then(df => {
+          return csv.filter(df, 'labourForce', lf => !Number.isNaN(lf));
+        }),
+        loadWideData(datasets.wbUnemployment).then(df => {
+          return csv.filter(df, 'unemployment', lf => !Number.isNaN(lf));
+        }),
+        loadWideData(datasets.pwtCapitalStock),
+      ]);
+
+      const join = csv.innerJoins(
+        [ituPhone, wbPop, wbLabourForce, wbUnemployment, pwtStock],
+        ['countryIso', 'year'],
+      );
+      const joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
+      const size = csv.getSize(join);
+
+      console.log(joinGroup);
+
+      join.labour = new Float32Array(size);
+      join.technology = new Float32Array(size);
+      join.initialTech = new Float32Array(size);
+      join.capitalSteadyState = new Float32Array(size);
+      join.capital = new Float32Array(size);
+      join.output = new Float32Array(size);
+
+      for (let i = 0; i < size; i++) {
+        join.labour[i] = 1;
+        join.initialTech[i] = 1_000_000;
+      }
+
+      return [size, joinGroup, join];
     }
   </script>
   <script type="text/wgsl" id="compute-shader">
+    struct ExogenousState {
+      alpha: f32,
+      saving: f32,
+      depreciation: f32,
+    };
+
+    @group(1) @binding(0) var<uniform> exogenous: ExogenousState;
+
     @group(0) @binding(0) var<storage, read> phoneUsage: array<f32>;
     @group(0) @binding(1) var<storage, read> prevTechnology: array<f32>;
     @group(0) @binding(2) var<storage, read_write> technology: array<f32>;
 
+    /**
+     * Computes technology over the different periods
+     */
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
@@ -226,7 +259,7 @@
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-      capitalSteadyState[idx] = technologyInput[idx];
+      capitalSteadyState[idx] = exogenous.alpha * technologyInput[idx];
     }
   </script>
 </body>

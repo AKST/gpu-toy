@@ -2,12 +2,22 @@
  * @import { RowDefinition, Frame, GroupedFrame } from './type.ts';
  */
 
+const SIZE_SYM = Symbol();
+
+/**
+ * @param {Frame} frame
+ * @returns {number}
+ */
+export function getSize(frame) {
+  return frame[SIZE_SYM];
+}
+
 /**
  * Returns a record with series for each column.
  *
  * @param {string} text
  * @param {{ headers: RowDefinition[] }} cfg
- * @returns {{ size: number, df: Frame }}
+ * @returns {Frame}
  */
 export function processCsv(text, { headers, dropRows = 0 }) {
   // Proper CSV parser that handles quoted fields with commas
@@ -70,18 +80,19 @@ export function processCsv(text, { headers, dropRows = 0 }) {
   for (const [key, { type }] of Object.entries(columnIndices)) {
     size = result[key].length;
     if (type === 'number') {
-      result[key] = new Float64Array(result[key]);
+      result[key] = new Float32Array(result[key]);
     }
   }
 
-  return { size, df: result };
+  result[SIZE_SYM] = size;
+  return result;
 }
 
 /**
  * @param {Frame} frame
  * @param {string[]} retain
  * @param {{ key: string, val: string }} outColumns
- * @returns {{ size: number, df: Frame }}
+ * @returns {Frame}
  */
 export function wideToLong(frame, retain, outColumns) {
   const allColumns = Object.keys(frame);
@@ -102,7 +113,7 @@ export function wideToLong(frame, retain, outColumns) {
   result[outColumns.key] = new Array(outputSize);
 
   // Add value column (numbers)
-  result[outColumns.val] = new Float64Array(outputSize);
+  result[outColumns.val] = new Float32Array(outputSize);
 
   // Fill the output frame
   let outIdx = 0;
@@ -124,13 +135,14 @@ export function wideToLong(frame, retain, outColumns) {
     }
   }
 
-  // Convert key column to Float64Array if all values are numbers
+  // Convert key column to Float32Array if all values are numbers
   const allNumbers = result[outColumns.key].every(v => typeof v === 'number');
   if (allNumbers) {
-    result[outColumns.key] = new Float64Array(result[outColumns.key]);
+    result[outColumns.key] = new Float32Array(result[outColumns.key]);
   }
 
-  return { size: outputSize, df: result };
+  result[SIZE_SYM] = outputSize;
+  return result;
 }
 
 /**
@@ -189,15 +201,17 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
   // Reorder the frame data according to sorted indices
   const reorderedFrame = {};
   for (const [key, values] of Object.entries(frame)) {
-    const isTypedArray = values instanceof Float64Array;
-    const newArray = isTypedArray ? new Float64Array(numRows) : new Array(numRows);
+    const isTypedArray = values instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(numRows) : new Array(numRows);
 
     for (let i = 0; i < numRows; i++) {
       newArray[i] = values[indices[i].index];
     }
 
     reorderedFrame[key] = newArray;
+    reorderedFrame[SIZE_SYM] = newArray.length;
   }
+
 
   return {
     frame: reorderedFrame,
@@ -212,8 +226,20 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
  * @param {string} b
  */
 export function renameColumn(frame, a, b) {
-  frame[b] = frame[a];
-  delete frame[a];
+  const frame2 = { ...frame };
+  frame2[b] = frame[a];
+  delete frame2[a];
+  return frame2;
+}
+
+/**
+ * @param {Frame} frame
+ * @param {string} a
+ */
+export function dropColumn(frame, a) {
+  const frame2 = { ...frame };
+  delete frame2[a];
+  return frame2;
 }
 
 /**
@@ -222,7 +248,7 @@ export function renameColumn(frame, a, b) {
  * @param {Frame} frame
  * @param {string} colname
  * @param {(value: any, index: number) => boolean} p - Predicate function
- * @returns {{ size: number, df: Frame }}
+ * @returns {Frame}
  */
 export function filter(frame, colname, p) {
   const allColumns = Object.keys(frame);
@@ -241,8 +267,8 @@ export function filter(frame, colname, p) {
 
   // Build filtered frame
   for (const col of allColumns) {
-    const isTypedArray = frame[col] instanceof Float64Array;
-    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+    const isTypedArray = frame[col] instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(outputSize) : new Array(outputSize);
 
     for (let i = 0; i < outputSize; i++) {
       newArray[i] = frame[col][keepIndices[i]];
@@ -251,14 +277,15 @@ export function filter(frame, colname, p) {
     result[col] = newArray;
   }
 
-  return { size: outputSize, df: result };
+  result[SIZE_SYM] = outputSize;
+  return result;
 }
 
 /**
  * @param {Frame} left
  * @param {Frame} right
  * @param {string[]} onKeys
- * @returns {{ size: number, df: Frame }}
+ * @returns {Frame}
  */
 export function innerJoin(left, right, onKeys) {
   const leftColumns = Object.keys(left);
@@ -294,8 +321,8 @@ export function innerJoin(left, right, onKeys) {
 
   // Copy left columns
   for (const col of leftColumns) {
-    const isTypedArray = left[col] instanceof Float64Array;
-    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+    const isTypedArray = left[col] instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(outputSize) : new Array(outputSize);
 
     for (let i = 0; i < outputSize; i++) {
       newArray[i] = left[col][matchedRows[i].leftIdx];
@@ -306,8 +333,8 @@ export function innerJoin(left, right, onKeys) {
 
   // Copy right columns (excluding join keys since they're already in left)
   for (const col of rightColumns) {
-    const isTypedArray = right[col] instanceof Float64Array;
-    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+    const isTypedArray = right[col] instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(outputSize) : new Array(outputSize);
 
     for (let i = 0; i < outputSize; i++) {
       newArray[i] = right[col][matchedRows[i].rightIdx];
@@ -316,13 +343,14 @@ export function innerJoin(left, right, onKeys) {
     result[col] = newArray;
   }
 
-  return { size: outputSize, df: result };
+  result[SIZE_SYM] = outputSize;
+  return result;
 }
 
 /**
  * @param {Frame[]} frames
  * @param {string[]} onKeys
- * @returns {{ size: number, df: Frame }}
+ * @returns {Frame}
  */
 export function innerJoins(frames, onKeys) {
   if (frames.length === 0) {
@@ -340,8 +368,58 @@ export function innerJoins(frames, onKeys) {
   let result = innerJoin(frames[0], frames[1], onKeys);
 
   for (let i = 2; i < frames.length; i++) {
-    result = innerJoin(result.df, frames[i], onKeys);
+    result = innerJoin(result, frames[i], onKeys);
   }
 
+  return result;
+}
+
+/**
+ * Finds duplicate rows based on specified columns.
+ *
+ * @param {Frame} frame
+ * @param {string[]} columns - Columns to check for duplicates
+ * @returns {{ duplicateIndices: number[], keyGroups: Map<string, number[]> }}
+ */
+export function findDuplicates(frame, columns) {
+  const numRows = frame[columns[0]].length;
+  const keyGroups = new Map();
+
+  // Build index of all rows by key
+  for (let i = 0; i < numRows; i++) {
+    const key = columns.map(col => frame[col][i]).join('|');
+    if (!keyGroups.has(key)) {
+      keyGroups.set(key, []);
+    }
+    keyGroups.get(key).push(i);
+  }
+
+  // Find which keys have duplicates (appear more than once)
+  const duplicateIndices = [];
+  const duplicateKeys = new Map();
+
+  for (const [key, indices] of keyGroups.entries()) {
+    if (indices.length > 1) {
+      duplicateKeys.set(key, indices);
+      duplicateIndices.push(...indices);
+    }
+  }
+
+  return {
+    duplicateIndices,
+    keyGroups: duplicateKeys,
+  };
+}
+
+/**
+ * @param {Frame} frame
+ * @param {number} index
+ * @returns {Record<string, number | string>}
+ */
+export function record(frame, index) {
+  const result = {};
+  for (const [col, values] of Object.entries(frame)) {
+    result[col] = values[index];
+  }
   return result;
 }

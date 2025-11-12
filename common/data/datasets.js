@@ -2,7 +2,8 @@ export const ituCellPhones = {
   url: '../files/mobile-cellular-subscriptions.csv',
   headers: [
     { name: 'seriesID', type: 'string', drop: true },
-    { name: 'seriesCode', type: 'string', drop: true },
+    // need to filter by 'i271'
+    { name: 'seriesCode', type: 'string' },
     { name: 'seriesName', type: 'string', drop: true },
     { name: 'seriesParent', type: 'string', drop: true },
     { name: 'seriesUnits', type: 'string', drop: true },
@@ -17,22 +18,69 @@ export const ituCellPhones = {
   ],
 };
 
-const wbYears = Array.from({ length: 2025 - 1960 }, (_, i) => 1960+i);
+const generateYears = (a, b) =>
+  Array.from({ length: b - a }, (_, i) => ({ name: `${a+i}`, type: 'number' }))
+
+const wbYears = generateYears(1960, 2025);
+const pwtYears = generateYears(1950, 2024);
+
+const wbColumns = [
+  { name: 'Country Name', type: 'string', drop: true },
+  { name: 'Country Code', type: 'string', rename: 'countryIso' },
+  { name: 'Indicator Name', type: 'string', drop: true },
+  { name: 'Indicator Code', type: 'string', drop: true },
+  ...wbYears,
+];
 
 export const wbPopulation = {
   url: '../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv',
   dropRows: 4,
   headers: {
-    load: [
-      { name: 'Country Name', type: 'string', drop: true },
-      { name: 'Country Code', type: 'string', rename: 'countryIso' },
-      { name: 'Indicator Name', type: 'string', drop: true },
-      { name: 'Indicator Code', type: 'string', drop: true },
-      ...wbYears.map(year => ({ name: `${year}`, type: 'number' })),
-    ],
+    load: wbColumns,
     long: {
       retain: ['countryIso'],
       colout: { val: 'population', key: 'year' },
+    },
+  },
+};
+
+export const wbLabourForce = {
+  url: '../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv',
+  dropRows: 4,
+  headers: {
+    load: wbColumns,
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'labourForce', key: 'year' },
+    },
+  },
+};
+
+export const wbUnemployment = {
+  url: '../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv',
+  dropRows: 4,
+  headers: {
+    load: wbColumns,
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'unemployment', key: 'year' },
+    },
+  },
+};
+
+export const pwtCapitalStock = {
+  url: '../files/2025-11-12T08-48_export.csv',
+  headers: {
+    load: [
+      { type: 'string', name: 'ISO code', rename: 'countryIso' },
+      { drop: true, type: 'string', name: 'Country' },
+      { drop: true, type: 'string', name: 'Variable code' },
+      { drop: true, type: 'string', name: 'Variable name' },
+      ...pwtYears,
+    ],
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'capitalPPP', key: 'year' },
     },
   },
 };
