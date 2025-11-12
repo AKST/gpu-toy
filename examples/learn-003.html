@@ -28,26 +28,24 @@
         usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
       });
 
-      // Create shader modules
-      const shader1Code = document.getElementById('shader-1').textContent;
-      const shader2Code = document.getElementById('shader-2').textContent;
-      const shader1Module = device.createShaderModule({ code: shader1Code });
-      const shader2Module = device.createShaderModule({ code: shader2Code });
+      // Create shader module (one module with two entry points)
+      const shaderCode = document.getElementById('compute-shader').textContent;
+      const shaderModule = device.createShaderModule({ code: shaderCode });
 
-      // Create compute pipelines
+      // Create compute pipelines with different entry points
       const pipeline1 = device.createComputePipeline({
         layout: 'auto',
         compute: {
-          module: shader1Module,
-          entryPoint: 'main',
+          module: shaderModule,
+          entryPoint: 'step1',
         },
       });
 
       const pipeline2 = device.createComputePipeline({
         layout: 'auto',
         compute: {
-          module: shader2Module,
-          entryPoint: 'main',
+          module: shaderModule,
+          entryPoint: 'step2',
         },
       });
 
@@ -62,7 +60,7 @@
       });
 
       const bindGroup2 = device.createBindGroup({
-        layout: pipeline2.getBindGroupLayout(0),
+        layout: pipeline2.getBindGroupLayout(1),
         entries: [
           { binding: 0, resource: { buffer: technologyBuffer } },
           { binding: 1, resource: { buffer: capitalSteadyStateBuffer } },
@@ -82,7 +80,7 @@
       // Pass 2: Parallel compute
       const pass2 = commandEncoder.beginComputePass();
       pass2.setPipeline(pipeline2);
-      pass2.setBindGroup(0, bindGroup2);
+      pass2.setBindGroup(1, bindGroup2);
       pass2.dispatchWorkgroups(Math.ceil(size / 64)); // 64 threads per workgroup
       pass2.end();
 
@@ -213,29 +211,28 @@
       the identity of its inputs (although the first should multiply).
     </p>
   </template>
-  <script type="text/wgsl" id="shader-1">
+  <script type="text/wgsl" id="compute-shader">
+    // Step 1: Sequential compute for technology
     @group(0) @binding(0) var<storage, read> phoneUsage: array<f32>;
     @group(0) @binding(1) var<storage, read> prevTechnology: array<f32>;
     @group(0) @binding(2) var<storage, read_write> technology: array<f32>;
 
     @compute @workgroup_size(1)
-    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-
       // For now: multiply phoneUsage * prevTechnology
       technology[idx] = phoneUsage[idx] * prevTechnology[idx];
     }
-  </script>
-  <script type="text/wgsl" id="shader-2">
-    @group(0) @binding(0) var<storage, read> technology: array<f32>;
-    @group(0) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
+
+    // Step 2: Parallel compute for capitalSteadyState
+    @group(1) @binding(0) var<storage, read> technologyInput: array<f32>;
+    @group(1) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
 
     @compute @workgroup_size(64)
-    fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-
       // For now: identity (copy input to output)
-      capitalSteadyState[idx] = technology[idx];
+      capitalSteadyState[idx] = technologyInput[idx];
     }
   </script>
 </body>

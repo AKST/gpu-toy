@@ -12,9 +12,7 @@
 export function processCsv(text, { headers, dropRows = 0 }) {
   const cleanCell = s => s?.replace(/\"/g, '');
   const lines = text.trim().split('\n').slice(dropRows);
-  console.log(lines[0])
   const csvHeaders = lines[0].split(',').map(cleanCell);
-  console.log(csvHeaders);
 
   const result = {};
   const columnIndices = {};
