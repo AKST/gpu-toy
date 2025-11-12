@@ -1,5 +1,29 @@
 export const ituCellPhones = {
   url: '../files/mobile-cellular-subscriptions.csv',
+  seriesCode: 'i271',
+  dataName: 'phoneUsage',
+  headers: [
+    { name: 'seriesID', type: 'string', drop: true },
+    // need to filter by 'i271'
+    { name: 'seriesCode', type: 'string' },
+    { name: 'seriesName', type: 'string', drop: true },
+    { name: 'seriesParent', type: 'string', drop: true },
+    { name: 'seriesUnits', type: 'string', drop: true },
+    { name: 'entityID', type: 'string', rename: 'countryId' },
+    { name: 'entityIso', type: 'string', rename: 'countryIso' },
+    { name: 'entityName', type: 'string', rename: 'countryName' },
+    { name: 'dataValue', type: 'number', rename: 'value' },
+    { name: 'dataYear', type: 'number', rename: 'year' },
+    { name: 'dataNote', type: 'string', drop: true },
+    { name: 'dataSource', type: 'string', drop: true },
+    { name: 'seriesDescription', type: 'string', drop: true },
+  ],
+};
+
+export const ituMobileBoardBandSubcriptions = {
+  url: '../files/active-mobile-broadband-subscriptions_1762956324397.csv',
+  seriesCode: 'i271mw',
+  dataName: 'phoneInternet',
   headers: [
     { name: 'seriesID', type: 'string', drop: true },
     // need to filter by 'i271'

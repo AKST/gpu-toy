@@ -1,5 +1,7 @@
 /**
  * @import { RowDefinition, Frame, GroupedFrame } from './type.ts';
+ *
+ * @typdef {[string, (a: any) => boolean]} Predicate
  */
 
 const SIZE_SYM = Symbol();
@@ -423,3 +425,53 @@ export function record(frame, index) {
   }
   return result;
 }
+
+/**
+ * @param {Frame} frame
+ * @param {Predicate[]} predicates
+ * @returns {Record<string, number | string> | null}
+ */
+export function find(frame, predicates) {
+  const index = findIndex(frame, predicates);
+  return index != null ? record(frame, index) : null;
+}
+
+/**
+ * @param {Frame} frame
+ * @param {Predicate[]} predicates
+ * @param {string} key
+ * @returns {number | string | null}
+ */
+export function findKey(frame, predicates, key) {
+  const index = findIndex(frame, predicates);
+  return index != null ? frame[key][index] : null;
+}
+
+
+/**
+ * @param {Frame} frame
+ * @param {Predicate[]} predicates
+ * @returns {number}
+ */
+export function findIndex(frame, predicates) {
+  const numRows = getSize(frame);
+
+  for (let i = 0; i < numRows; i++) {
+    let allMatch = true;
+
+    for (const [colname, predicate] of predicates) {
+      if (!predicate(frame[colname][i])) {
+        allMatch = false;
+        break;
+      }
+    }
+
+    if (allMatch) {
+      return i;
+    }
+  }
+
+  return null;
+}
+
+

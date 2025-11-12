@@ -13,10 +13,17 @@
     import { initWebGPU } from '../common/init.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
 
-    const uniforms = UniformAdapter.create([
+    const INITIAL_TECH = 1_000;
+
+    const uniformExo = UniformAdapter.create([
       { size: 4, init: 2/3, name: 'alpha' },
       { size: 4, init: 0.4, name: 'saving' },
       { size: 4, init: 0.07, name: 'depreciation' },
+    ]);
+
+    const uniformEff = UniformAdapter.create([
+      { size: 4, init: 0.001, name: 'phoneEffect' },
+      { size: 4, init: 0.001, name: 'phoneInternet' },
     ]);
 
     try {
@@ -26,11 +33,21 @@
       device.pushErrorScope('validation');
 
       const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-      const phoneUsageBuffer = createBuffer(device, df.phoneUsage, COPY_DST);
-      const prevTechnologyBuffer = createBuffer(device, df.initialTech, COPY_DST);
-      const technologyBuffer = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
-      const capitalSteadyStateBuffer = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
-      const uniformBuffer = uniforms.createBuffer(device);
+      const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
+      const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
+      const bufferPrevTechnology = createBuffer(device, df.initialTech, COPY_DST);
+      const bufferTechnology = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
+      const bufferOutput = createBuffer(device, df.output, COPY_SRC | COPY_DST);
+      const bufferCapitalSteadyState = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
+      const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
+      const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
+      const bufferUnifExo = uniformExo.createBuffer(device);
+      const bufferUnifEff = uniformEff.createBuffer(device);
+
+      const uniformBindGrp = [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 1, resource: { buffer: bufferUnifEff } },
+      ];
 
       const shaderCode = document.getElementById('compute-shader').textContent;
       const shaderModule = device.createShaderModule({ code: shaderCode });
@@ -40,13 +57,17 @@
         device,
         shaderModule,
         commandEncoder,
-        //uniforms: uniformBuffer,
+        uniforms: uniformBindGrp,
         workGroups: size,
         entryPoint: 'step1',
         entries: [
-          { binding: 0, resource: { buffer: phoneUsageBuffer } },
-          { binding: 1, resource: { buffer: prevTechnologyBuffer } },
-          { binding: 2, resource: { buffer: technologyBuffer } },
+          { binding: 0, resource: { buffer: bufferTechnology } },
+          { binding: 1, resource: { buffer: bufferOutput } },
+          { binding: 2, resource: { buffer: bufferPhoneUsage } },
+          { binding: 3, resource: { buffer: bufferPhoneInternet } },
+          { binding: 4, resource: { buffer: bufferPrevTechnology } },
+          { binding: 5, resource: { buffer: bufferUnemployment } },
+          { binding: 6, resource: { buffer: bufferLabourForce } },
         ],
       });
 
@@ -54,12 +75,14 @@
         device,
         shaderModule,
         commandEncoder,
-        uniforms: uniformBuffer,
+        uniforms: uniformBindGrp,
         workGroups: Math.ceil(size / 64),
         entryPoint: 'step2',
         entries: [
-          { binding: 0, resource: { buffer: technologyBuffer } },
-          { binding: 1, resource: { buffer: capitalSteadyStateBuffer } },
+          { binding: 0, resource: { buffer: bufferCapitalSteadyState } },
+          { binding: 1, resource: { buffer: bufferTechnology } },
+          { binding: 5, resource: { buffer: bufferUnemployment } },
+          { binding: 6, resource: { buffer: bufferLabourForce } },
         ],
       });
 
@@ -68,14 +91,15 @@
       step2.loadIntoPass(pass);
       pass.end();
 
-      const mapping1 = createMapping(device, commandEncoder, technologyBuffer, df.technology);
-      const mapping2 = createMapping(device, commandEncoder, capitalSteadyStateBuffer, df.capitalSteadyState);
+      const mapping1 = createMapping(device, commandEncoder, bufferTechnology, df.technology);
+      const mapping2 = createMapping(device, commandEncoder, bufferCapitalSteadyState, df.capitalSteadyState);
       device.queue.submit([commandEncoder.finish()]);
       await mapping1.read();
       await mapping2.read();
 
       console.log('Technology results:', df.technology.slice(0, 10));
       console.log('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
+      console.log(df);
 
       const errorScope = await device.popErrorScope();
       if (errorScope) {
@@ -118,7 +142,7 @@
 
       const bindGroupUniform = uniforms && device.createBindGroup({
         layout: pipeline.getBindGroupLayout(1),
-        entries: [{ binding: 0, resource: { buffer: uniforms } }],
+        entries: uniforms,
       });
 
       const loadIntoPass = pass => {
@@ -183,19 +207,40 @@
             }))
       }
 
+      function loadItuData(cfg) {
+        return loadLongData(cfg)
+            .then(df => csv.filter(df, 'seriesCode', y => y === cfg.seriesCode))
+            .then(df => csv.dropColumn(df, 'seriesCode'))
+            .then(df => csv.renameColumn(df, 'value', cfg.dataName))
+      }
+
+      const diffF32Array = (arr, groups) => {
+        const diff = new Float32Array(arr.length);
+
+        for (const [groupValue, { offset, count }] of groups.groups.entries()) {
+          // First value in group stays as-is
+          diff[offset] = arr[offset];
+
+          // Compute diffs within this group only
+          for (let i = 1; i < count; i++) {
+            const idx = offset + i;
+            diff[idx] = arr[idx] - arr[idx - 1];
+          }
+        }
+
+        return diff;
+      };
+
       const [
         ituPhone,
+        ituMobileInternet,
         wbPop,
         wbLabourForce,
         wbUnemployment,
         pwtStock,
       ] = await Promise.all([
-        (
-          loadLongData(datasets.ituCellPhones)
-            .then(df => csv.filter(df, 'seriesCode', y => y === 'i271'))
-            .then(df => csv.dropColumn(df, 'seriesCode'))
-            .then(df => csv.renameColumn(df, 'value', 'phoneUsage'))
-        ),
+        loadItuData(datasets.ituCellPhones),
+        loadItuData(datasets.ituMobileBoardBandSubcriptions),
         loadWideData(datasets.wbPopulation),
         loadWideData(datasets.wbLabourForce).then(df => {
           return csv.filter(df, 'labourForce', lf => !Number.isNaN(lf));
@@ -207,30 +252,34 @@
       ]);
 
       const join = csv.innerJoins(
-        [ituPhone, wbPop, wbLabourForce, wbUnemployment, pwtStock],
+        [ituPhone, ituMobileInternet, wbPop, wbLabourForce, wbUnemployment, pwtStock],
         ['countryIso', 'year'],
       );
       const joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
       const size = csv.getSize(join);
+      console.log(join);
 
-      console.log(joinGroup);
-
-      join.labour = new Float32Array(size);
       join.technology = new Float32Array(size);
       join.initialTech = new Float32Array(size);
       join.capitalSteadyState = new Float32Array(size);
       join.capital = new Float32Array(size);
       join.output = new Float32Array(size);
+      join.phoneUsageD = diffF32Array(join.phoneUsage, joinGroup);
+      join.phoneInternetD = diffF32Array(join.phoneInternet, joinGroup);
 
       for (let i = 0; i < size; i++) {
-        join.labour[i] = 1;
-        join.initialTech[i] = 1_000_000;
+        join.initialTech[i] = INITIAL_TECH;
       }
 
       return [size, joinGroup, join];
     }
   </script>
   <script type="text/wgsl" id="compute-shader">
+    struct Effects {
+      phoneFixed: f32,
+      internetExp: f32,
+    };
+
     struct ExogenousState {
       alpha: f32,
       saving: f32,
@@ -238,10 +287,15 @@
     };
 
     @group(1) @binding(0) var<uniform> exogenous: ExogenousState;
+    @group(1) @binding(1) var<uniform> effects: Effects;
 
-    @group(0) @binding(0) var<storage, read> phoneUsage: array<f32>;
-    @group(0) @binding(1) var<storage, read> prevTechnology: array<f32>;
-    @group(0) @binding(2) var<storage, read_write> technology: array<f32>;
+    @group(0) @binding(0) var<storage, read_write> technology: array<f32>;
+    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(2) var<storage, read> phoneAccessGrowth: array<f32>;
+    @group(0) @binding(3) var<storage, read> phoneInternetGrowth: array<f32>;
+    @group(0) @binding(4) var<storage, read> prevTechnology: array<f32>;
+    @group(0) @binding(5) var<storage, read> unemployment: array<f32>;
+    @group(0) @binding(6) var<storage, read> labourForce: array<f32>;
 
     /**
      * Computes technology over the different periods
@@ -249,17 +303,25 @@
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-      technology[idx] = phoneUsage[idx] * prevTechnology[idx];
+      let l = labourForce[idx] * (1 - unemployment[idx]);
+      technology[idx] = phoneAccessGrowth[idx] * effects.phoneFixed
+                      + phoneInternetGrowth[idx] * effects.internetExp
+                      + prevTechnology[idx];
+      output[idx] = technology[idx] * pow(l, exogenous.alpha);
     }
 
 
-    @group(0) @binding(0) var<storage, read> technologyInput: array<f32>;
-    @group(0) @binding(1) var<storage, read_write> capitalSteadyState: array<f32>;
+    @group(0) @binding(0) var<storage, read_write> capitalSteadyState: array<f32>;
+    @group(0) @binding(1) var<storage, read> technologyInput: array<f32>;
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
+      let a = exogenous.alpha * technologyInput[idx];
+      let l = labourForce[idx] * (1 - unemployment[idx]);
       capitalSteadyState[idx] = exogenous.alpha * technologyInput[idx];
+
+
     }
   </script>
 </body>
