@@ -161,6 +161,11 @@
               headers: wbPopulation.headers.load,
               dropRows: wbPopulation.dropRows,
             }))
+            .then([size, df] => csv.wideToLong(
+              df,
+              wbPopulation.long.retain,
+              wbPopulation.long.colout,
+            ))
         ),
         (
           fetch(ituCellPhones.url)

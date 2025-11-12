@@ -32,8 +32,7 @@ export const wbPopulation = {
     ],
     long: {
       retain: ['countryIso'],
-      columnValue: 'population',
-      columnKey: 'year',
+      colout: { val: 'population', key: 'year' },
     },
   },
 };

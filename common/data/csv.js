@@ -57,6 +57,15 @@ export function processCsv(text, { headers, dropRows = 0 }) {
 }
 
 /**
+ * @param {Frame} frame
+ * @param {string[]} retain
+ * @param {{ key: string, val: string }} outColumns
+ * @returns {{ size: number, df: Frame }}
+ */
+export function wideToLong(frame, retain, outColumns) {
+}
+
+/**
  * First reorders the data (by groupBY then sortBy) then outputs
  * meta data to find the indices to read from a certain group.
  *
