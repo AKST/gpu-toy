@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../common/frame-style.css">
+  <title>Web GPU - Line Graph</title>
+</head>
+<body>
+  <script type="module">
+    import { sortAndIdentifyGroups, processCsv } from '../common/data/csv.js';
+    import { ituCellPhones } from '../common/data/datasets.js';
+
+    try {
+      const response = await fetch(ituCellPhones.url);
+      const text = await response.text();
+      const df = processCsv(text, ituCellPhones.headers);
+      const groups = sortAndIdentifyGroups('countryId', 'year', df);
+
+      console.log('Ordered and grouped data:', groups);
+    } catch (e) {
+      console.error(e);
+    }
+  </script>
+  <template id="about">
+    <h1>About</h1>
+    <p>
+      What I'd like to do create 2 step compute shader (i have never done this
+      before), the steps work like so:
+    </p>
+    <ol>
+      <li>
+        <h2>Compute Sequential nonlinear portion for each country</h2>
+        for each country (entityName), sequentially (over dataYear), read a
+        observation (dataValue) (the previous periods output if exists or 1)
+        and output a which will be read by the subsequent period. This means
+        I can only run this for each country at a time. The pass looks roughly
+        like this:
+        <code>(dataValue: float, lastOut: float = 1.0) => float</code>
+      </li>
+      <li>
+        <h2>Compute linear portion</h2>
+        After this however the second step will output another input and this can
+        be done independently for each period for each country. The pass looks
+        roughly like this:
+        <code>(periodOut: float) => float</code>
+      </li>
+    </ol>
+    <p>
+      At stage I just need help with the initial WebGPU setup as
+      I am unfairly with using WebGPU generally, I need to setup
+      the 2 compute steps and feed data from one step into the next
+      and make sure it executes. For now each step will just produce
+      the identity of its inputs (although the first should multiply).
+    </p>
+  </template>
+</body>
+</html>
