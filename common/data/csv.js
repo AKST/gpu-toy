@@ -10,9 +10,30 @@
  * @returns {{ size: number, df: Frame }}
  */
 export function processCsv(text, { headers, dropRows = 0 }) {
-  const cleanCell = s => s?.replace(/\"/g, '');
+  // Proper CSV parser that handles quoted fields with commas
+  const parseCsvLine = (line) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const lines = text.trim().split('\n').slice(dropRows);
-  const csvHeaders = lines[0].split(',').map(cleanCell);
+  const csvHeaders = parseCsvLine(lines[0]);
 
   const result = {};
   const columnIndices = {};
@@ -33,10 +54,10 @@ export function processCsv(text, { headers, dropRows = 0 }) {
 
   // Process data rows
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',');
+    const values = parseCsvLine(lines[i]);
 
     for (const [key, { index, type }] of Object.entries(columnIndices)) {
-      const value = cleanCell(values[index]);
+      const value = values[index];
       if (type === 'number') {
         result[key].push(parseFloat(value));
       } else {
@@ -63,6 +84,53 @@ export function processCsv(text, { headers, dropRows = 0 }) {
  * @returns {{ size: number, df: Frame }}
  */
 export function wideToLong(frame, retain, outColumns) {
+  const allColumns = Object.keys(frame);
+  const pivotColumns = allColumns.filter(col => !retain.includes(col));
+
+  const inputRows = frame[allColumns[0]].length;
+  const outputSize = inputRows * pivotColumns.length;
+
+  // Initialize output frame
+  const result = {};
+
+  // Add retained columns (string arrays)
+  for (const col of retain) {
+    result[col] = new Array(outputSize);
+  }
+
+  // Add key column (will contain pivot column names, converted to numbers if possible)
+  result[outColumns.key] = new Array(outputSize);
+
+  // Add value column (numbers)
+  result[outColumns.val] = new Float64Array(outputSize);
+
+  // Fill the output frame
+  let outIdx = 0;
+  for (let row = 0; row < inputRows; row++) {
+    for (const pivotCol of pivotColumns) {
+      // Copy retained columns
+      for (const retainCol of retain) {
+        result[retainCol][outIdx] = frame[retainCol][row];
+      }
+
+      // Parse pivot column name as key (try to parse as number)
+      const keyValue = parseFloat(pivotCol);
+      result[outColumns.key][outIdx] = isNaN(keyValue) ? pivotCol : keyValue;
+
+      // Copy value
+      result[outColumns.val][outIdx] = frame[pivotCol][row];
+
+      outIdx++;
+    }
+  }
+
+  // Convert key column to Float64Array if all values are numbers
+  const allNumbers = result[outColumns.key].every(v => typeof v === 'number');
+  if (allNumbers) {
+    result[outColumns.key] = new Float64Array(result[outColumns.key]);
+  }
+
+  return { size: outputSize, df: result };
 }
 
 /**
@@ -146,4 +214,134 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
 export function renameColumn(frame, a, b) {
   frame[b] = frame[a];
   delete frame[a];
+}
+
+/**
+ * Drops row that don't match the predicate.
+ *
+ * @param {Frame} frame
+ * @param {string} colname
+ * @param {(value: any, index: number) => boolean} p - Predicate function
+ * @returns {{ size: number, df: Frame }}
+ */
+export function filter(frame, colname, p) {
+  const allColumns = Object.keys(frame);
+  const numRows = frame[colname].length;
+
+  // Find which rows match the predicate
+  const keepIndices = [];
+  for (let i = 0; i < numRows; i++) {
+    if (p(frame[colname][i], i)) {
+      keepIndices.push(i);
+    }
+  }
+
+  const outputSize = keepIndices.length;
+  const result = {};
+
+  // Build filtered frame
+  for (const col of allColumns) {
+    const isTypedArray = frame[col] instanceof Float64Array;
+    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+
+    for (let i = 0; i < outputSize; i++) {
+      newArray[i] = frame[col][keepIndices[i]];
+    }
+
+    result[col] = newArray;
+  }
+
+  return { size: outputSize, df: result };
+}
+
+/**
+ * @param {Frame} left
+ * @param {Frame} right
+ * @param {string[]} onKeys
+ * @returns {{ size: number, df: Frame }}
+ */
+export function innerJoin(left, right, onKeys) {
+  const leftColumns = Object.keys(left);
+  const rightColumns = Object.keys(right).filter(col => !onKeys.includes(col));
+
+  const leftRows = left[leftColumns[0]].length;
+  const rightRows = right[onKeys[0]].length;
+
+  // Build index for right frame using join keys
+  const rightIndex = new Map();
+  for (let i = 0; i < rightRows; i++) {
+    const key = onKeys.map(k => right[k][i]).join('|');
+    if (!rightIndex.has(key)) {
+      rightIndex.set(key, []);
+    }
+    rightIndex.get(key).push(i);
+  }
+
+  // Find matches
+  const matchedRows = [];
+  for (let i = 0; i < leftRows; i++) {
+    const key = onKeys.map(k => left[k][i]).join('|');
+    const rightMatches = rightIndex.get(key);
+    if (rightMatches) {
+      for (const rightIdx of rightMatches) {
+        matchedRows.push({ leftIdx: i, rightIdx });
+      }
+    }
+  }
+
+  const outputSize = matchedRows.length;
+  const result = {};
+
+  // Copy left columns
+  for (const col of leftColumns) {
+    const isTypedArray = left[col] instanceof Float64Array;
+    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+
+    for (let i = 0; i < outputSize; i++) {
+      newArray[i] = left[col][matchedRows[i].leftIdx];
+    }
+
+    result[col] = newArray;
+  }
+
+  // Copy right columns (excluding join keys since they're already in left)
+  for (const col of rightColumns) {
+    const isTypedArray = right[col] instanceof Float64Array;
+    const newArray = isTypedArray ? new Float64Array(outputSize) : new Array(outputSize);
+
+    for (let i = 0; i < outputSize; i++) {
+      newArray[i] = right[col][matchedRows[i].rightIdx];
+    }
+
+    result[col] = newArray;
+  }
+
+  return { size: outputSize, df: result };
+}
+
+/**
+ * @param {Frame[]} frames
+ * @param {string[]} onKeys
+ * @returns {{ size: number, df: Frame }}
+ */
+export function innerJoins(frames, onKeys) {
+  if (frames.length === 0) {
+    return { size: 0, df: {} };
+  }
+
+  if (frames.length === 1) {
+    return {
+      size: frames[0][Object.keys(frames[0])[0]].length,
+      df: frames[0]
+    };
+  }
+
+  // Sequential join: join first two frames, then join result with third, etc.
+  let result = innerJoin(frames[0], frames[1], onKeys);
+
+  for (let i = 2; i < frames.length; i++) {
+    result = innerJoin(result.df, frames[i], onKeys);
+  }
+
+  return result;
 }

@@ -161,11 +161,12 @@
               headers: wbPopulation.headers.load,
               dropRows: wbPopulation.dropRows,
             }))
-            .then([size, df] => csv.wideToLong(
-              df,
-              wbPopulation.long.retain,
-              wbPopulation.long.colout,
-            ))
+            .then(({ df }) => {
+              const { retain, colout } = wbPopulation.headers.long;
+              const out = csv.wideToLong(df, retain, colout);
+              return out.df;
+            })
+            .then(df => csv.filter(df, 'year', y => y >= 2000))
         ),
         (
           fetch(ituCellPhones.url)
@@ -176,10 +177,14 @@
         ),
       ]);
 
+      wbPop.groups = csv.sortAndIdentifyGroups('countryIso', 'year', wbPop.df);
+      ituPhone.groups = csv.sortAndIdentifyGroups('countryIso', 'year', ituPhone.df);
+
       const size = ituPhone.size;
+      const join = csv.innerJoins([ituPhone.df, wbPop.df], ['countryIso', 'year']);
+      console.log(join.size, wbPop.size, ituPhone.size);
 
       csv.renameColumn(ituPhone.df, 'value', 'phoneUsage');
-      ituPhone.groups = csv.sortAndIdentifyGroups('countryId', 'year', ituPhone.df);
 
       // Exogenous, will populate later
       ituPhone.df.labour = new Float64Array(size);

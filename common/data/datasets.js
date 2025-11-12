@@ -17,7 +17,7 @@ export const ituCellPhones = {
   ],
 };
 
-const wbYears = Array.from({ length: 2024 - 1960 }, (_, i) => 1960+i);
+const wbYears = Array.from({ length: 2025 - 1960 }, (_, i) => 1960+i);
 
 export const wbPopulation = {
   url: '../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv',
