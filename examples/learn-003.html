@@ -7,6 +7,10 @@
   <title>Web GPU - Line Graph</title>
 </head>
 <body>
+  <script>
+    window.addEventListener('error', event => console.error(event.error));
+    window.addEventListener('unhandledrejection', event => console.error(event.error));
+  </script>
   <script type="module">
     import * as csv from '../common/data/csv.js';
     import * as datasets from '../common/data/datasets.js';
@@ -45,67 +49,74 @@
       ],
     });
 
-    let size, groups, df;
-    try {
-      [size, groups, df] = await setupData();
-      const { canvas, adapter, device } = await initWebGPU();
+    const { canvas, adpater, device } = await initWebGPU();
+    const [size, groups, df] = await setupData();
 
-      device.pushErrorScope('validation');
+    device.pushErrorScope('validation');
 
-      const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-      const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
-      const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
-      const bufferPrevTechnology = createBuffer(device, df.initialTech, COPY_DST);
-      const bufferTechnology = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
-      const bufferOutput = createBuffer(device, df.output, COPY_SRC | COPY_DST);
-      const bufferCapitalSteadyState = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
-      const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
-      const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
-      const bufferUnifExo = uniformExo.createBuffer(device);
-      const bufferUnifEff = uniformEff.createBuffer(device);
+    const { COPY_DST, COPY_SRC } = GPUBufferUsage;
+    const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
+    const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
+    const bufferPrevTechnology = createBuffer(device, df.initialTech, COPY_DST);
+    const bufferTechnology = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
+    const bufferOutput = createBuffer(device, df.output, COPY_SRC | COPY_DST);
+    const bufferCapitalSteadyState = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
+    const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
+    const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
+    const bufferUnifExo = uniformExo.createBuffer(device);
+    const bufferUnifEff = uniformEff.createBuffer(device);
 
-      const uniformBindGrp = [
-        { binding: 0, resource: { buffer: bufferUnifExo } },
-        { binding: 1, resource: { buffer: bufferUnifEff } },
-      ];
+    const uniformBindGrp = [
+      { binding: 0, resource: { buffer: bufferUnifExo } },
+      { binding: 1, resource: { buffer: bufferUnifEff } },
+    ];
 
-      const shaderCode = document.getElementById('compute-shader').textContent;
-      const shaderModule = device.createShaderModule({ code: shaderCode });
-      const commandEncoder = device.createCommandEncoder();
+    const shaderCode = document.getElementById('compute-shader').textContent;
+    const shaderModule = device.createShaderModule({ code: shaderCode });
+    const commandEncoder = device.createCommandEncoder();
 
-      const step1 = createStep({
-        device,
-        shaderModule,
-        commandEncoder,
-        uniforms: uniformBindGrp,
-        workGroups: size,
-        entryPoint: 'step1',
-        entries: [
-          { binding: 0, resource: { buffer: bufferTechnology } },
-          { binding: 1, resource: { buffer: bufferOutput } },
-          { binding: 2, resource: { buffer: bufferPhoneUsage } },
-          { binding: 3, resource: { buffer: bufferPhoneInternet } },
-          { binding: 4, resource: { buffer: bufferPrevTechnology } },
-          { binding: 5, resource: { buffer: bufferUnemployment } },
-          { binding: 6, resource: { buffer: bufferLabourForce } },
-        ],
-      });
+    const step1 = createStep({
+      device,
+      shaderModule,
+      commandEncoder,
+      uniforms: uniformBindGrp,
+      workGroups: size,
+      entryPoint: 'step1',
+      entries: [
+        { binding: 0, resource: { buffer: bufferTechnology } },
+        { binding: 1, resource: { buffer: bufferOutput } },
+        { binding: 2, resource: { buffer: bufferPhoneUsage } },
+        { binding: 3, resource: { buffer: bufferPhoneInternet } },
+        { binding: 4, resource: { buffer: bufferPrevTechnology } },
+        { binding: 5, resource: { buffer: bufferUnemployment } },
+        { binding: 6, resource: { buffer: bufferLabourForce } },
+      ],
+    });
 
-      const step2 = createStep({
-        device,
-        shaderModule,
-        commandEncoder,
-        uniforms: uniformBindGrp,
-        workGroups: Math.ceil(size / 64),
-        entryPoint: 'step2',
-        entries: [
-          { binding: 0, resource: { buffer: bufferCapitalSteadyState } },
-          { binding: 1, resource: { buffer: bufferTechnology } },
-          { binding: 5, resource: { buffer: bufferUnemployment } },
-          { binding: 6, resource: { buffer: bufferLabourForce } },
-        ],
-      });
+    const step2 = createStep({
+      device,
+      shaderModule,
+      commandEncoder,
+      uniforms: uniformBindGrp,
+      workGroups: Math.ceil(size / 64),
+      entryPoint: 'step2',
+      entries: [
+        { binding: 0, resource: { buffer: bufferCapitalSteadyState } },
+        { binding: 1, resource: { buffer: bufferTechnology } },
+        { binding: 5, resource: { buffer: bufferUnemployment } },
+        { binding: 6, resource: { buffer: bufferLabourForce } },
+      ],
+    });
 
+    await runGPU();
+
+    const errorScope = await device.popErrorScope();
+    if (errorScope) {
+      console.error('GPU:',errorScope.message);
+      console.info(errorScope);
+    }
+
+    async function runGPU() {
       const pass = commandEncoder.beginComputePass();
       step1.loadIntoPass(pass);
       step2.loadIntoPass(pass);
@@ -117,17 +128,11 @@
       await mapping1.read();
       await mapping2.read();
 
+      showLog('Observations:', csv.getSize(df));
+      showLog('Countries:', groups.groupValues.length);
       showLog('Technology results:', df.technology.slice(0, 10));
       showLog('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
-      console.log(df);
-
-      const errorScope = await device.popErrorScope();
-      if (errorScope) {
-        console.error('GPU:',errorScope.message);
-        console.info(errorScope);
-      }
-    } catch (e) {
-      console.error(e);
+      console.info(df, groups);
     }
 
     async function onMessage(event) {
@@ -154,6 +159,9 @@
       uniformExo.update('depreciation', data.depreciation);
       uniformEff.update('phoneEffect', data.phoneEffect);
       uniformEff.update('phoneInternet', data.phoneInternet);
+      uniformExo.updateBuffer(device, bufferUnifExo);
+      uniformEff.updateBuffer(device, bufferUnifEff);
+      runGPU();
     }
 
     async function onAction(message) {

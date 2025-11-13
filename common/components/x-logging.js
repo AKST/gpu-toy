@@ -20,8 +20,8 @@ export class LoggingElement extends HTMLElement {
     row.appendChild(document.createElement('td'));
     row.appendChild(document.createElement('td'));
     row.children[0].innerText = new Date().toLocaleTimeString();
-    row.children[1].innerText = JSON.stringify(data);
-    this.table.appendChild(row);
+    row.children[1].innerText = data.map(e => JSON.stringify(e)).join(' ');
+    this.table.insertBefore(row, this.table.children[1]);
   }
 
   flush() {

@@ -1,6 +1,8 @@
 :host {
   position: relative;
-  overflow: hidden;
+  display: block;
+  overflow: auto;
+  max-height: 200px;
 }
 
 table {
@@ -8,7 +10,6 @@ table {
   grid-template-columns: 80px 1fr;
   grid-gap: 8px;
   max-width: 100%;
-  overflow-x: scroll;
 }
 
 tr {
@@ -18,7 +19,16 @@ tr {
   grid-template-columns: subgrid;
 }
 
-th { text-align: left }
+tr:first-child {
+  display: contents;
+}
+
+th {
+  text-align: left;
+  position: sticky;
+  background: white;
+  top: 0;
+}
 td {
   overflow: scroll;
   font-family: monospace;
