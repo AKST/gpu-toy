@@ -117,8 +117,8 @@
       await mapping1.read();
       await mapping2.read();
 
-      console.log('Technology results:', df.technology.slice(0, 10));
-      console.log('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
+      showLog('Technology results:', df.technology.slice(0, 10));
+      showLog('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
       console.log(df);
 
       const errorScope = await device.popErrorScope();
@@ -181,6 +181,10 @@
         default:
           return console.log('unknown action', message);
       }
+    }
+
+    function showLog(...args) {
+      window.parent?.postMessage({ kind: 'push-log', log: args });
     }
 
     /**

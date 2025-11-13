@@ -1,10 +1,5 @@
 export class ActionsElement extends HTMLElement {
-  #root;
-
-  constructor(){
-    super();
-    this.#root = this.attachShadow({ mode: "open" });
-  }
+  #root = this.attachShadow({ mode: "open" });
 
   connectedCallback() {
     this.#root.addEventListener('click', event => {

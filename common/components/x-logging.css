@@ -1,0 +1,27 @@
+:host {
+  position: relative;
+  overflow: hidden;
+}
+
+table {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  grid-gap: 8px;
+  max-width: 100%;
+  overflow-x: scroll;
+}
+
+tr {
+  display: grid;
+  grid-column: 1 / 3;
+  grid-gap: 8px;
+  grid-template-columns: subgrid;
+}
+
+th { text-align: left }
+td {
+  overflow: scroll;
+  font-family: monospace;
+  white-space: nowrap;
+  &::-webkit-scrollbar { display: none }
+}

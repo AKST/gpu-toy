@@ -7,12 +7,16 @@
   <style>
     * { box-sizing: border-box; }
     iframe { border: none; }
-    body, html { margin: 0; padding: 0 }
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      max-height: 100dvh;
+    }
     body {
       display: grid;
       grid-template-rows: auto 1fr auto;
       grid-template-columns: auto 1fr auto;
-      max-height: 100dvh;
     }
     header {
       display: grid;
@@ -29,6 +33,12 @@
     nav { grid-column: 1 / 2; }
     main { grid-column: 2 / 3; }
     x-config { grid-column: 3 / 4; }
+
+    footer {
+      padding-bottom: 16px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+    }
 
     main {
       display: flex;
@@ -60,6 +70,7 @@
   </main>
   <x-config id="config"></x-config>
   <footer>
+    <x-logging id="logging"></x-logging>
     <p>Created by <a href="https://www.akst.io/" target="_blank">Angus Thomsen</a></p>
   </footer>
   <script type="module">
@@ -67,6 +78,7 @@
       import("./common/components/x-attribution.js"),
       import("./common/components/x-actions.js"),
       import("./common/components/x-config.js"),
+      import("./common/components/x-logging.js"),
     ]);
   </script>
   <script type="module" src="./index.js"></script>

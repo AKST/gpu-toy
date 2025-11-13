@@ -1,10 +1,5 @@
 export class AttributionElement extends HTMLElement {
-  #root;
-
-  constructor(){
-    super();
-    this.#root = this.attachShadow({ mode: "open" });
-  }
+  #root = this.attachShadow({ mode: "open" });
 
   setAttribution(title, link) {
     this.flush();

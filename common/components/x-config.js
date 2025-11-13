@@ -12,12 +12,7 @@ function createKnob(name, labelText, value) {
 }
 
 export class ConfigSideBarElement extends HTMLElement {
-  #root;
-
-  constructor(){
-    super();
-    this.#root = this.attachShadow({ mode: "open" });
-  }
+  #root = this.attachShadow({ mode: "open" });
 
   connectedCallback() {
     const cssLink = document.createElement('link')

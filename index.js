@@ -2,12 +2,13 @@
  * @param {URL} url
  */
 export function loadApp({ searchParams }) {
-  const { attr, config, actions } = getChrome();
+  const { attr, config, actions, logging } = getChrome();
   const app = searchParams.get('example') ?? 'learn-001.html';
   const iframe = document.querySelector('iframe');
   attr.flush?.();
   config.flush?.();
   actions.flush?.();
+  logging.flush?.();
   iframe.src = `./examples/${app}`;
 }
 
@@ -15,7 +16,8 @@ function getChrome() {
   const attr = document.querySelector('#attribution');
   const config = document.querySelector('#config');
   const actions = document.querySelector('#actions');
-  return { attr, config, actions };
+  const logging = document.querySelector('#logging');
+  return { attr, config, actions, logging };
 }
 
 globalThis.addEventListener('click', event => {
@@ -40,7 +42,7 @@ globalThis.addEventListener('cfg-update', event => {
 });
 
 globalThis.addEventListener('message', event => {
-  const { attr, config, actions } = getChrome();
+  const { attr, config, actions, logging } = getChrome();
   const message = event.data;
 
   switch (message.kind) {
@@ -54,6 +56,10 @@ globalThis.addEventListener('message', event => {
 
     case 'register-knobs':
       config.setKnobs?.(message.knobs);
+      break;
+
+    case 'push-log':
+      logging.log(message.log);
       break;
 
     default:
