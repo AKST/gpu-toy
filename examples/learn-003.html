@@ -42,7 +42,24 @@
           case 'action':
             switch (message.id) {
               case 'download':
-                return await csv.downloadFile(df, 'model-inputs.csv');
+                return await csv.downloadFile(
+                  csv.renameColumn(
+                    csv.dropColumn(df, [
+                      'countryId',
+                      'technology',
+                      'initialTech',
+                      'capitalSteadyState',
+                      'capital',
+                      'output',
+                    ]),
+                    {
+                      generatedData: 'faked_askAngusWhatThatMeans',
+                      phoneUsageD: 'difference_in_phoneUsage',
+                      phoneInternetD: 'difference_in_phoneInternet',
+                    },
+                  ),
+                  'model-inputs.csv',
+                );
 
               default:
                 return console.log('unknown action', message);
@@ -169,7 +186,7 @@
           return fetching.loadLongData(cfg)
               .then(df => csv.filter(df, 'seriesCode', y => y === cfg.seriesCode))
               .then(df => csv.dropColumn(df, 'seriesCode'))
-              .then(df => csv.renameColumn(df, 'value', cfg.dataName))
+              .then(df => csv.renameColumn(df, { value: cfg.dataName }))
         },
       };
 

@@ -278,23 +278,30 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
 
 /**
  * @param {Frame} frame
- * @param {string} a
- * @param {string} b
+ * @param {Record<string, string>} names
  */
-export function renameColumn(frame, a, b) {
+export function renameColumn(frame, names) {
   const frame2 = { ...frame };
-  frame2[b] = frame[a];
-  delete frame2[a];
+  for (const [a, b] of Object.entries(names)) {
+    frame2[b] = frame[a];
+    delete frame2[a];
+  }
   return frame2;
 }
 
 /**
  * @param {Frame} frame
- * @param {string} a
+ * @param {string string[]} colName
  */
-export function dropColumn(frame, a) {
+export function dropColumn(frame, colName) {
   const frame2 = { ...frame };
-  delete frame2[a];
+
+  if (typeof colName === 'string') {
+    delete frame2[colName];
+  } else for (const name of colName) {
+    delete frame2[name];
+  }
+
   return frame2;
 }
 
