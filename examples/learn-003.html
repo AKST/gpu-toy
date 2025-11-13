@@ -11,6 +11,7 @@
     import * as csv from '../common/data/csv.js';
     import * as datasets from '../common/data/datasets.js';
     import { initWebGPU } from '../common/init.js';
+    import { createBuffer, createStep, createMapping } from '../common/webgpu/setup.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
 
     const INITIAL_TECH = 1_000;
@@ -110,126 +111,41 @@
       console.error(e);
     }
 
-    function createBuffer(device, data, flag) {
-      const buffer = device.createBuffer({
-        size: data.length * data.constructor.BYTES_PER_ELEMENT,
-        usage: GPUBufferUsage.STORAGE | flag,
-      });
-      device.queue.writeBuffer(buffer, 0, data);
-      return buffer;
-    }
-
-    function createStep({
-      device,
-      shaderModule,
-      entryPoint,
-      entries,
-      workGroups,
-      uniforms,
-    }) {
-      const pipeline = device.createComputePipeline({
-        layout: 'auto',
-        compute: {
-          module: shaderModule,
-          entryPoint,
-        },
-      });
-
-      const bindGroup = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries,
-      });
-
-      const bindGroupUniform = uniforms && device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(1),
-        entries: uniforms,
-      });
-
-      const loadIntoPass = pass => {
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, bindGroup);
-        if (bindGroupUniform) {
-          pass.setBindGroup(1, bindGroupUniform);
-        }
-        pass.dispatchWorkgroups(workGroups);
-      };
-
-      return { loadIntoPass, pipeline, bindGroup, bindGroupUniform };
-    }
-
-    function createMapping(device, commandEncoder, buffer, out) {
-      const ArrayConst = out.constructor
-      const bufferSize = out.length * ArrayConst.BYTES_PER_ELEMENT;
-      const stagingBuffer = device.createBuffer({
-        size: bufferSize,
-        usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-      });
-
-      commandEncoder.copyBufferToBuffer(
-        buffer, 0,
-        stagingBuffer, 0,
-        bufferSize
-      );
-
-      const read = async () => {
-        await stagingBuffer.mapAsync(GPUMapMode.READ);
-        out.set(new ArrayConst(stagingBuffer.getMappedRange()));
-        stagingBuffer.unmap();
-      };
-
-      return { read, stagingBuffer };
-    }
-
     /**
      * Setup data for processing
      */
     async function setupData() {
-      function loadWideData(cfg) {
-        return fetch(cfg.url)
-            .then(r => r.text())
-            .then(t => csv.processCsv(t, {
-              headers: cfg.headers.load,
-              dropRows: cfg.dropRows ?? 0,
-            }))
-            .then(df => {
-              const { retain, colout } = cfg.headers.long;
-              return csv.wideToLong(df, retain, colout);
-            })
-            .then(df => csv.filter(df, 'year', y => y >= 2000))
-      }
-
-      function loadLongData(cfg) {
-        return fetch(cfg.url)
-            .then(r => r.text())
-            .then(t => csv.processCsv(t, {
-              headers: cfg.headers,
-              dropRows: cfg.dropRows ?? 0,
-            }))
-      }
-
-      function loadItuData(cfg) {
-        return loadLongData(cfg)
-            .then(df => csv.filter(df, 'seriesCode', y => y === cfg.seriesCode))
-            .then(df => csv.dropColumn(df, 'seriesCode'))
-            .then(df => csv.renameColumn(df, 'value', cfg.dataName))
-      }
-
-      const diffF32Array = (arr, groups) => {
-        const diff = new Float32Array(arr.length);
-
-        for (const [groupValue, { offset, count }] of groups.groups.entries()) {
-          // First value in group stays as-is
-          diff[offset] = arr[offset];
-
-          // Compute diffs within this group only
-          for (let i = 1; i < count; i++) {
-            const idx = offset + i;
-            diff[idx] = arr[idx] - arr[idx - 1];
-          }
-        }
-
-        return diff;
+      const fetching = {
+        loadWideData(cfg) {
+          return fetch(cfg.url)
+              .then(r => r.text())
+              .then(t => csv.processCsv(t, {
+                headers: cfg.headers.load,
+                dropRows: cfg.dropRows ?? 0,
+              }))
+              .then(df => {
+                const { retain, colout } = cfg.headers.long;
+                return csv.wideToLong(df, retain, colout);
+              })
+        },
+        loadLongData(cfg) {
+          return fetch(cfg.url)
+              .then(r => r.text())
+              .then(t => csv.processCsv(t, {
+                headers: cfg.headers,
+                dropRows: cfg.dropRows ?? 0,
+              }))
+        },
+        loadItuData(cfg) {
+          return fetching.loadLongData(cfg)
+              .then(df => csv.filter(df, 'seriesCode', y => y === cfg.seriesCode))
+              .then(df => csv.dropColumn(df, 'seriesCode'))
+              .then(df => csv.renameColumn(df, 'value', cfg.dataName))
+        },
       };
+
+      const columnsThatNeedCleaning = ['capitalPPP', 'labourForce', 'phoneInternet', 'phoneUsage', 'population', 'unemployment'];
+      const columnsThatNeedRepeating = ['countryId', 'countryIso', 'countryName'];
 
       const [
         ituPhone,
@@ -239,38 +155,88 @@
         wbUnemployment,
         pwtStock,
       ] = await Promise.all([
-        loadItuData(datasets.ituCellPhones),
-        loadItuData(datasets.ituMobileBoardBandSubcriptions),
-        loadWideData(datasets.wbPopulation),
-        loadWideData(datasets.wbLabourForce).then(df => {
-          return csv.filter(df, 'labourForce', lf => !Number.isNaN(lf));
-        }),
-        loadWideData(datasets.wbUnemployment).then(df => {
-          return csv.filter(df, 'unemployment', lf => !Number.isNaN(lf));
-        }),
-        loadWideData(datasets.pwtCapitalStock),
+        fetching.loadItuData(datasets.ituCellPhones),
+        fetching.loadItuData(datasets.ituMobileBoardBandSubcriptions),
+        fetching.loadWideData(datasets.wbPopulation),
+        fetching.loadWideData(datasets.wbLabourForce),
+        fetching.loadWideData(datasets.wbUnemployment),
+        fetching.loadWideData(datasets.pwtCapitalStock),
       ]);
 
-      const join = csv.innerJoins(
+      let join = csv.outerJoins(
         [ituPhone, ituMobileInternet, wbPop, wbLabourForce, wbUnemployment, pwtStock],
         ['countryIso', 'year'],
       );
-      const joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
-      const size = csv.getSize(join);
-      console.log(join);
+      join = csv.filter(join, 'year', year => !Number.isNaN(year) && year > 1999);
+      let joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
+      joinGroup = csv.filterGroups(joinGroup, { uniformSize: true }, meta => {
+        if (meta.max < 2012 || meta.count < 10) return false;
 
+        const join = joinGroup.frame;
+        const { count, offset } = meta;
+        for (const colname of columnsThatNeedCleaning) {
+          const input = join[colname];
+          let nans = 0;
+          for (let i = offset; i < count; i++) {
+            if (Number.isNaN(input[i])) nans += 1;
+          }
+          if (nans >= (count - nans)) return false;
+        }
+        return true;
+      });
+
+
+      joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', joinGroup.frame);
+      join = joinGroup.frame;
+
+      const size = csv.getSize(join);
       join.technology = new Float32Array(size);
       join.initialTech = new Float32Array(size);
       join.capitalSteadyState = new Float32Array(size);
       join.capital = new Float32Array(size);
       join.output = new Float32Array(size);
-      join.phoneUsageD = diffF32Array(join.phoneUsage, joinGroup);
-      join.phoneInternetD = diffF32Array(join.phoneInternet, joinGroup);
+
+      join.phoneUsageD = new Float32Array(size);
+      join.phoneInternetD = new Float32Array(size);
+      join.generatedData = new Array(size).fill('');
+
+      /**
+       * Clean up the data may not be complete
+       */
+      for (const colname of columnsThatNeedCleaning) {
+        const input = join[colname];
+        for (const [groupValue, { offset, count }] of joinGroup.groups.entries()) {
+          if (Number.isNaN(input[offset])) {
+            input[offset] = 0;
+            join.generatedData[offset] += ':'+colname
+          }
+          for (let i = 1; i < count; i++) {
+            let idx = offset + i;
+            if (Number.isNaN(input[idx])) {
+              join.generatedData[idx] += ':'+colname
+              input[idx] = input[idx-1];
+            }
+          }
+        }
+      }
+
+      for (const [diff, sum] of [
+        [join.phoneUsageD, join.phoneUsage],
+        [join.phoneInternetD, join.phoneInternet],
+      ]) {
+        for (const [groupValue, { offset, count }] of joinGroup.groups.entries()) {
+          diff[offset] = sum[offset];
+          for (let i = 1; i < count; i++) {
+            diff[offset + i] = sum[offset + i] - sum[offset + i - 1];
+          }
+        }
+      }
 
       for (let i = 0; i < size; i++) {
         join.initialTech[i] = INITIAL_TECH;
       }
 
+      console.log(joinGroup);
       return [size, joinGroup, join];
     }
   </script>

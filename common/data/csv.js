@@ -177,7 +177,7 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
     return a.sortValue < b.sortValue ? -1 : a.sortValue > b.sortValue ? 1 : 0;
   });
 
-  // Build group metadata: track offset and count for each group
+  // Build group metadata: track offset, count, min, and max for each group
   const groupOffsets = new Map();
   const groupValues = [];
   let currentGroup = null;
@@ -186,18 +186,27 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
   indices.forEach((item, idx) => {
     if (item.groupValue !== currentGroup) {
       if (currentGroup !== null) {
-        groupOffsets.get(currentGroup).count = idx - currentOffset;
+        const metadata = groupOffsets.get(currentGroup);
+        metadata.count = idx - currentOffset;
+        metadata.max = indices[idx - 1].sortValue;
       }
       currentGroup = item.groupValue;
       currentOffset = idx;
-      groupOffsets.set(currentGroup, { offset: currentOffset, count: 0 });
+      groupOffsets.set(currentGroup, {
+        offset: currentOffset,
+        count: 0,
+        min: item.sortValue,
+        max: item.sortValue,
+      });
       groupValues.push(currentGroup);
     }
   });
 
-  // Set count for the last group
+  // Set count and max for the last group
   if (currentGroup !== null) {
-    groupOffsets.get(currentGroup).count = numRows - currentOffset;
+    const metadata = groupOffsets.get(currentGroup);
+    metadata.count = numRows - currentOffset;
+    metadata.max = indices[numRows - 1].sortValue;
   }
 
   // Reorder the frame data according to sorted indices
@@ -219,6 +228,8 @@ export function sortAndIdentifyGroups(groupBy, sortBy, frame) {
     frame: reorderedFrame,
     groups: groupOffsets,
     groupValues,
+    sortBy,
+    groupBy,
   };
 }
 
@@ -281,6 +292,150 @@ export function filter(frame, colname, p) {
 
   result[SIZE_SYM] = outputSize;
   return result;
+}
+
+/**
+ * Drops groups that don't match the predicate.
+ *
+ * @param {GroupedFrame} grouping
+ * @param {{ uniformSize: boolean }} cfg
+ * @param {(meta: GroupMetadata) => boolean} p - Predicate function
+ * @returns {GroupedFrame}
+ */
+export function filterGroups(grouping, cfg, p) {
+  const { frame, groups, groupValues, sortBy } = grouping;
+
+  // Filter groups based on predicate
+  const retainedGroups = [];
+  for (const groupValue of groupValues) {
+    const metadata = groups.get(groupValue);
+    if (p(metadata)) {
+      retainedGroups.push({ groupValue, metadata });
+    }
+  }
+
+  if (!cfg.uniformSize) {
+    // Just copy the retained groups' data
+    const totalRows = retainedGroups.reduce((sum, g) => sum + g.metadata.count, 0);
+    const newFrame = {};
+    const allColumns = Object.keys(frame).filter(key => typeof key === 'string');
+
+    for (const col of allColumns) {
+      const isTypedArray = frame[col] instanceof Float32Array;
+      const newArray = isTypedArray ? new Float32Array(totalRows) : new Array(totalRows);
+      newFrame[col] = newArray;
+    }
+
+    let outIdx = 0;
+    const newGroups = new Map();
+    const newGroupValues = [];
+
+    for (const { groupValue, metadata } of retainedGroups) {
+      const newOffset = outIdx;
+
+      // Copy data for this group
+      for (let i = 0; i < metadata.count; i++) {
+        for (const col of allColumns) {
+          newFrame[col][outIdx] = frame[col][metadata.offset + i];
+        }
+        outIdx++;
+      }
+
+      newGroups.set(groupValue, {
+        offset: newOffset,
+        count: metadata.count,
+        min: metadata.min,
+        max: metadata.max,
+      });
+      newGroupValues.push(groupValue);
+    }
+
+    newFrame[SIZE_SYM] = totalRows;
+
+    return {
+      frame: newFrame,
+      groups: newGroups,
+      groupValues: newGroupValues,
+    };
+  } else {
+    // Find the global min/max across all retained groups
+    let globalMin = Infinity;
+    let globalMax = -Infinity;
+
+    for (const { metadata } of retainedGroups) {
+      globalMin = Math.min(globalMin, metadata.min);
+      globalMax = Math.max(globalMax, metadata.max);
+    }
+
+    // Assuming integer steps (e.g., years)
+    const expectedSize = Math.floor(globalMax - globalMin) + 1;
+    const totalRows = retainedGroups.length * expectedSize;
+
+    const newFrame = {};
+    const allColumns = Object.keys(frame).filter(key => typeof key === 'string');
+
+    for (const col of allColumns) {
+      const isTypedArray = frame[col] instanceof Float32Array;
+      const newArray = isTypedArray ? new Float32Array(totalRows) : new Array(totalRows);
+      newFrame[col] = newArray;
+    }
+
+    let outIdx = 0;
+    const newGroups = new Map();
+    const newGroupValues = [];
+
+    for (const { groupValue, metadata } of retainedGroups) {
+      const newOffset = outIdx;
+
+      // Build a map of existing sortBy values in this group
+      const existingValues = new Map();
+      for (let i = 0; i < metadata.count; i++) {
+        const srcIdx = metadata.offset + i;
+        const sortValue = frame[sortBy][srcIdx];
+        existingValues.set(sortValue, srcIdx);
+      }
+
+      // Fill in all values from globalMin to globalMax
+      for (let sortValue = globalMin; sortValue <= globalMax; sortValue++) {
+        const srcIdx = existingValues.get(sortValue);
+
+        if (srcIdx !== undefined) {
+          // Copy existing data
+          for (const col of allColumns) {
+            newFrame[col][outIdx] = frame[col][srcIdx];
+          }
+        } else {
+          // Fill missing data with NaN/null
+          for (const col of allColumns) {
+            if (col === sortBy) {
+              newFrame[col][outIdx] = sortValue;
+            } else {
+              const isTypedArray = frame[col] instanceof Float32Array;
+              newFrame[col][outIdx] = isTypedArray ? NaN : null;
+            }
+          }
+        }
+
+        outIdx++;
+      }
+
+      newGroups.set(groupValue, {
+        offset: newOffset,
+        count: expectedSize,
+        min: globalMin,
+        max: globalMax,
+      });
+      newGroupValues.push(groupValue);
+    }
+
+    newFrame[SIZE_SYM] = totalRows;
+
+    return {
+      frame: newFrame,
+      groups: newGroups,
+      groupValues: newGroupValues,
+    };
+  }
 }
 
 /**
@@ -350,6 +505,96 @@ export function innerJoin(left, right, onKeys) {
 }
 
 /**
+ * @param {Frame} left
+ * @param {Frame} right
+ * @param {string[]} onKeys
+ * @returns {Frame}
+ */
+export function outerJoin(left, right, onKeys) {
+  const leftColumns = Object.keys(left);
+  const rightColumns = Object.keys(right).filter(col => !onKeys.includes(col));
+
+  const leftRows = left[leftColumns[0]].length;
+  const rightRows = right[onKeys[0]].length;
+
+  // Build index for right frame using join keys
+  const rightIndex = new Map();
+  for (let i = 0; i < rightRows; i++) {
+    const key = onKeys.map(k => right[k][i]).join('|');
+    if (!rightIndex.has(key)) {
+      rightIndex.set(key, []);
+    }
+    rightIndex.get(key).push(i);
+  }
+
+  // Track matched rows
+  const matchedRows = [];
+  const matchedRightIndices = new Set();
+
+  // Find matches from left
+  for (let i = 0; i < leftRows; i++) {
+    const key = onKeys.map(k => left[k][i]).join('|');
+    const rightMatches = rightIndex.get(key);
+    if (rightMatches) {
+      for (const rightIdx of rightMatches) {
+        matchedRows.push({ leftIdx: i, rightIdx });
+        matchedRightIndices.add(rightIdx);
+      }
+    } else {
+      // Left row with no match
+      matchedRows.push({ leftIdx: i, rightIdx: null });
+    }
+  }
+
+  // Add unmatched right rows
+  for (let i = 0; i < rightRows; i++) {
+    if (!matchedRightIndices.has(i)) {
+      matchedRows.push({ leftIdx: null, rightIdx: i });
+    }
+  }
+
+  const outputSize = matchedRows.length;
+  const result = {};
+
+  // Copy left columns
+  for (const col of leftColumns) {
+    const isTypedArray = left[col] instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(outputSize) : new Array(outputSize);
+
+    for (let i = 0; i < outputSize; i++) {
+      const leftIdx = matchedRows[i].leftIdx;
+      if (leftIdx !== null) {
+        newArray[i] = left[col][leftIdx];
+      } else {
+        newArray[i] = isTypedArray ? NaN : null;
+      }
+    }
+
+    result[col] = newArray;
+  }
+
+  // Copy right columns (excluding join keys since they're already in left)
+  for (const col of rightColumns) {
+    const isTypedArray = right[col] instanceof Float32Array;
+    const newArray = isTypedArray ? new Float32Array(outputSize) : new Array(outputSize);
+
+    for (let i = 0; i < outputSize; i++) {
+      const rightIdx = matchedRows[i].rightIdx;
+      if (rightIdx !== null) {
+        newArray[i] = right[col][rightIdx];
+      } else {
+        newArray[i] = isTypedArray ? NaN : null;
+      }
+    }
+
+    result[col] = newArray;
+  }
+
+  result[SIZE_SYM] = outputSize;
+  return result;
+}
+
+/**
  * @param {Frame[]} frames
  * @param {string[]} onKeys
  * @returns {Frame}
@@ -373,6 +618,20 @@ export function innerJoins(frames, onKeys) {
     result = innerJoin(result, frames[i], onKeys);
   }
 
+  return result;
+}
+
+/**
+ * @param {Frame[]} frames
+ * @param {string[]} onKeys
+ * @returns {Frame}
+ */
+export function outerJoins(frames, onKeys) {
+  if (frames.length < 2) throw new Error();
+  let result = outerJoin(frames[0], frames[1], onKeys);
+  for (let i = 2; i < frames.length; i++) {
+    result = outerJoin(result, frames[i], onKeys);
+  }
   return result;
 }
 
