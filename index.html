@@ -41,7 +41,10 @@
 <body>
   <header>
     <h1>GPU Toy</h1>
-    <x-attribution id="attribution"/>
+    <div>
+      <x-attribution id="attribution"></x-attribution>
+      <x-actions id="actions"></x-actions>
+    </div>
   </header>
   <nav>
     <h2>Examples</h2>
@@ -56,10 +59,13 @@
   </main>
   <footer>
   </footer>
-  <script type="module" src="./index.js"></script>
   <script type="module">
-    import "./common/components/x-attribution.js";
+    await Promise.all([
+      import("./common/components/x-attribution.js"),
+      import("./common/components/x-actions.js"),
+    ]);
   </script>
+  <script type="module" src="./index.js"></script>
 </body>
 </html>
 

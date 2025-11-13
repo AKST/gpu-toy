@@ -22,10 +22,17 @@ globalThis.addEventListener('click', event => {
 globalThis.addEventListener('message', event => {
   const message = event.data;
   const attr = document.querySelector('#attribution');
+  const actions = document.querySelector('#actions');
+
   switch (message.kind) {
     case 'attribute':
       attr.setAttribution(message.title, message.link)
       break;
+
+    case 'register-button':
+      actions.addButton(message.label, message.id);
+      break;
+
     default:
       break;
   }

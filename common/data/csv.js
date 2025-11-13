@@ -92,6 +92,49 @@ export function processCsv(text, { headers, dropRows = 0 }) {
 
 /**
  * @param {Frame} frame
+ * @param {string} fname
+ */
+export async function downloadFile(frame, fname) {
+  // Get all column names (excluding SIZE_SYM)
+  const columns = Object.keys(frame).filter(key => typeof key === 'string');
+  const numRows = getSize(frame);
+
+  // Build CSV string
+  const lines = [];
+
+  // Header
+  lines.push(columns.join(','));
+
+  // Rows
+  for (let i = 0; i < numRows; i++) {
+    const row = columns.map(col => {
+      const value = frame[col][i];
+      // Handle strings with commas/quotes
+      if (typeof value === 'string') {
+        if (value.includes(',') || value.includes('"')) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      }
+      return value;
+    }).join(',');
+    lines.push(row);
+  }
+
+  const csvContent = lines.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * @param {Frame} frame
  * @param {string[]} retain
  * @param {{ key: string, val: string }} outColumns
  * @returns {Frame}

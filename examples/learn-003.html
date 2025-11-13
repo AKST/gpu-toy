@@ -27,8 +27,37 @@
       { size: 4, init: 0.001, name: 'phoneInternet' },
     ]);
 
+    let size, groups, df;
+
+    window.parent?.postMessage({
+      kind: 'register-button',
+      label: 'Download Inputs',
+      id: 'download',
+    });
+
+    window.addEventListener('message', async (event) => {
+      try {
+        const message = event.data;
+        switch (message.kind) {
+          case 'action':
+            switch (message.id) {
+              case 'download':
+                return await csv.downloadFile(df, 'model-inputs.csv');
+
+              default:
+                return console.log('unknown action', message);
+            }
+
+          default:
+            return console.log('unknown message', message);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
     try {
-      const [size, groups, df] = await setupData();
+      [size, groups, df] = await setupData();
       const { canvas, adapter, device } = await initWebGPU();
 
       device.pushErrorScope('validation');
