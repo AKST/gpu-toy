@@ -303,7 +303,7 @@ export function filter(frame, colname, p) {
  * @returns {GroupedFrame}
  */
 export function filterGroups(grouping, cfg, p) {
-  const { frame, groups, groupValues, sortBy } = grouping;
+  const { frame, groups, groupValues, sortBy, groupBy } = grouping;
 
   // Filter groups based on predicate
   const retainedGroups = [];
@@ -356,6 +356,8 @@ export function filterGroups(grouping, cfg, p) {
       frame: newFrame,
       groups: newGroups,
       groupValues: newGroupValues,
+      sortBy,
+      groupBy,
     };
   } else {
     // Find the global min/max across all retained groups
@@ -409,6 +411,8 @@ export function filterGroups(grouping, cfg, p) {
           for (const col of allColumns) {
             if (col === sortBy) {
               newFrame[col][outIdx] = sortValue;
+            } else if (col === groupBy) {
+              newFrame[col][outIdx] = groupValue;
             } else {
               const isTypedArray = frame[col] instanceof Float32Array;
               newFrame[col][outIdx] = isTypedArray ? NaN : null;

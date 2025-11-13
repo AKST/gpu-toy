@@ -144,7 +144,10 @@
         },
       };
 
-      const columnsThatNeedCleaning = ['capitalPPP', 'labourForce', 'phoneInternet', 'phoneUsage', 'population', 'unemployment'];
+      const columnsThatNeedCleaning = [
+        'capitalPPP', 'labourForce', 'phoneInternet',
+        'phoneUsage', 'population', 'unemployment',
+      ];
       const columnsThatNeedRepeating = ['countryId', 'countryIso', 'countryName'];
 
       const [
@@ -182,6 +185,7 @@
           }
           if (nans >= (count - nans)) return false;
         }
+
         return true;
       });
 
@@ -215,6 +219,7 @@
             if (Number.isNaN(input[idx])) {
               join.generatedData[idx] += ':'+colname
               input[idx] = input[idx-1];
+              if (Number.isNaN(input[idx])) debugger;
             }
           }
         }
