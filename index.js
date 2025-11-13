@@ -20,7 +20,6 @@ function getChrome() {
 
 globalThis.addEventListener('click', event => {
   const { target } = event;
-  console.log(event);
   if (
       target instanceof HTMLAnchorElement &&
       target.hostname === location.hostname
@@ -35,7 +34,7 @@ globalThis.addEventListener('click', event => {
 globalThis.addEventListener('cfg-update', event => {
   const iframe = document.querySelector('iframe');
   iframe.contentWindow.postMessage({
-    kind: 'knobs',
+    kind: 'update-knobs',
     data: event.detail,
   });
 });
@@ -63,4 +62,5 @@ globalThis.addEventListener('message', event => {
   }
 });
 
+console.clear();
 loadApp(new URL(globalThis.location.href));

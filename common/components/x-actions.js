@@ -20,7 +20,6 @@ export class ActionsElement extends HTMLElement {
     const button = document.createElement('button');
     button.appendChild(document.createTextNode(label));
     button.dataset.actionId = id;
-    console.log(button);
     this.#root.appendChild(button);
   }
 

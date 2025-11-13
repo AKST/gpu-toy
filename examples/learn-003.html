@@ -33,6 +33,7 @@
       label: 'Download Inputs',
       id: 'download',
     });
+
     window.parent?.postMessage({
       kind: 'register-knobs',
       knobs: [
@@ -129,43 +130,56 @@
       console.error(e);
     }
 
-    console.log((new Set(df.countryIso)).size);
-
     async function onMessage(event) {
       try {
         const message = event.data;
         switch (message.kind) {
           case 'action':
-            switch (message.id) {
-              case 'download':
-                return await csv.downloadFile(
-                  csv.renameColumn(
-                    csv.dropColumn(df, [
-                      'countryId',
-                      'technology',
-                      'initialTech',
-                      'capitalSteadyState',
-                      'capital',
-                      'output',
-                    ]),
-                    {
-                      generatedData: 'faked_askAngusWhatThatMeans',
-                      phoneUsageD: 'difference_in_phoneUsage',
-                      phoneInternetD: 'difference_in_phoneInternet',
-                    },
-                  ),
-                  'model-inputs.csv',
-                );
+            return await onAction(message);
 
-              default:
-                return console.log('unknown action', message);
-            }
+          case 'update-knobs':
+            return updateUniforms(message.data)
 
           default:
             return console.log('unknown message', message);
         }
       } catch (e) {
         console.error(e);
+      }
+    }
+
+    function updateUniforms(data) {
+      uniformExo.update('alpha', data.alpha);
+      uniformExo.update('saving', data.saving);
+      uniformExo.update('depreciation', data.depreciation);
+      uniformEff.update('phoneEffect', data.phoneEffect);
+      uniformEff.update('phoneInternet', data.phoneInternet);
+    }
+
+    async function onAction(message) {
+      switch (message.id) {
+        case 'download':
+          return await csv.downloadFile(
+            csv.renameColumn(
+              csv.dropColumn(df, [
+                'countryId',
+                'technology',
+                'initialTech',
+                'capitalSteadyState',
+                'capital',
+                'output',
+              ]),
+              {
+                generatedData: 'faked_askAngusWhatThatMeans',
+                phoneUsageD: 'difference_in_phoneUsage',
+                phoneInternetD: 'difference_in_phoneInternet',
+              },
+            ),
+            'model-inputs.csv',
+          );
+
+        default:
+          return console.log('unknown action', message);
       }
     }
 

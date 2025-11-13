@@ -39,6 +39,14 @@ export class UniformAdapter {
   }
 
   /**
+   * @param {string} key
+   * @param {unknown} value
+   */
+  update(key, value) {
+    this.state[key] = value;
+  }
+
+  /**
    * @param {GPUDevice} device
    * @param {GPUBuffer} buffer
    */
