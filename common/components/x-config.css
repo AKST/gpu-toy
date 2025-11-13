@@ -1,0 +1,8 @@
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+input + label, input[type=submit] {
+  margin-top: 16px;
+}

@@ -27,52 +27,24 @@
       { size: 4, init: 0.001, name: 'phoneInternet' },
     ]);
 
-    let size, groups, df;
-
+    window.addEventListener('message', onMessage);
     window.parent?.postMessage({
       kind: 'register-button',
       label: 'Download Inputs',
       id: 'download',
     });
-
-    window.addEventListener('message', async (event) => {
-      try {
-        const message = event.data;
-        switch (message.kind) {
-          case 'action':
-            switch (message.id) {
-              case 'download':
-                return await csv.downloadFile(
-                  csv.renameColumn(
-                    csv.dropColumn(df, [
-                      'countryId',
-                      'technology',
-                      'initialTech',
-                      'capitalSteadyState',
-                      'capital',
-                      'output',
-                    ]),
-                    {
-                      generatedData: 'faked_askAngusWhatThatMeans',
-                      phoneUsageD: 'difference_in_phoneUsage',
-                      phoneInternetD: 'difference_in_phoneInternet',
-                    },
-                  ),
-                  'model-inputs.csv',
-                );
-
-              default:
-                return console.log('unknown action', message);
-            }
-
-          default:
-            return console.log('unknown message', message);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    window.parent?.postMessage({
+      kind: 'register-knobs',
+      knobs: [
+        { name: 'alpha', label: 'Alpha', init: 2/3 },
+        { name: 'saving', label: 'Savings Rate', init: 0.4 },
+        { name: 'deprecation', label: 'Deprecation Rate', init: 0.07 },
+        { name: 'phoneEffect', label: '𝛽 Phone Effect', init: 0.001 },
+        { name: 'phoneInternet', label: '𝛽 Internet Effect', init: 0.001 },
+      ],
     });
 
+    let size, groups, df;
     try {
       [size, groups, df] = await setupData();
       const { canvas, adapter, device } = await initWebGPU();
@@ -155,6 +127,46 @@
       }
     } catch (e) {
       console.error(e);
+    }
+
+    console.log((new Set(df.countryIso)).size);
+
+    async function onMessage(event) {
+      try {
+        const message = event.data;
+        switch (message.kind) {
+          case 'action':
+            switch (message.id) {
+              case 'download':
+                return await csv.downloadFile(
+                  csv.renameColumn(
+                    csv.dropColumn(df, [
+                      'countryId',
+                      'technology',
+                      'initialTech',
+                      'capitalSteadyState',
+                      'capital',
+                      'output',
+                    ]),
+                    {
+                      generatedData: 'faked_askAngusWhatThatMeans',
+                      phoneUsageD: 'difference_in_phoneUsage',
+                      phoneInternetD: 'difference_in_phoneInternet',
+                    },
+                  ),
+                  'model-inputs.csv',
+                );
+
+              default:
+                return console.log('unknown action', message);
+            }
+
+          default:
+            return console.log('unknown message', message);
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     /**
