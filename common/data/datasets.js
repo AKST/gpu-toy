@@ -57,6 +57,8 @@ const wbColumns = [
 ];
 
 export const wbPopulation = {
+  // in thousands
+  source: 'https://data.worldbank.org/indicator/SP.POP.TOTL',
   url: '../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv',
   dropRows: 4,
   headers: {
@@ -69,6 +71,8 @@ export const wbPopulation = {
 };
 
 export const wbLabourForce = {
+  // data sourced in 1000's
+  source: 'https://data.worldbank.org/indicator/SL.TLF.TOTL.IN',
   url: '../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv',
   dropRows: 4,
   headers: {
@@ -81,6 +85,7 @@ export const wbLabourForce = {
 };
 
 export const wbUnemployment = {
+  source: 'https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS',
   url: '../files/API_SL.UEM.TOTL.ZS_DS2_en_csv_v2_130165.csv',
   dropRows: 4,
   headers: {

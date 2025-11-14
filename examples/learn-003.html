@@ -34,9 +34,10 @@
     window.parent?.postMessage({
       kind: 'register-knobs',
       knobs: [
-        { name: 'alpha', label: 'Alpha', init: 2/3 },
-        { name: 'saving', label: 'Savings Rate', init: 0.4 },
-        { name: 'deprecation', label: 'Deprecation Rate', init: 0.07 },
+        { name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
+        { name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
+        { name: 'technology', label: '(A₀) (TFP Init)', init: 1000 },
+        { name: 'deprecation', label: '(d̄) Deprecation Rate', init: 0.07 },
         { name: 'phoneEffect', label: '𝛽 Phone Effect', init: 0.001 },
         { name: 'phoneInternet', label: '𝛽 Internet Effect', init: 0.001 },
       ],
@@ -133,7 +134,7 @@
       ],
     });
 
-    console.log('test');
+    showLog('running GPU');
     await runGPU();
     console.log(df);
 
@@ -199,15 +200,17 @@
       }
     }
 
-    function updateUniforms(data) {
+    async function updateUniforms(data) {
       uniformExo.update('alpha', data.alpha);
       uniformExo.update('saving', data.saving);
       uniformExo.update('depreciation', data.depreciation);
+      uniformExo.update('tech_init', data.technology);
       uniformEff.update('phoneEffect', data.phoneEffect);
       uniformEff.update('phoneInternet', data.phoneInternet);
       uniformExo.updateBuffer(device, bufferUnifExo);
       uniformEff.updateBuffer(device, bufferUnifEff);
-      runGPU();
+      await runGPU();
+      showLog('done');
     }
 
     async function onAction(message) {
@@ -481,7 +484,7 @@
         let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
         let t_growth_net = growth_netuse[idx] * effects.net_exp;
         let t = t_growth_phone + t_growth_net + t_last;
-        let l = labourForce[idx] * (1 - unemployment[idx]/100);
+        let l = labourForce[idx] * (100.0 - unemployment[idx]) * (1/100.0);
 
         let k = ralph_newton_capital(k_last, t, l);
         let y = t * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
@@ -500,9 +503,11 @@
       let idx = global_id.x;
       if (idx >= config.observations) { return; }
 
-      let a = exo.alpha * out[idx].technology;
-      let l = labourForce[idx] * (1 - unemployment[idx]);
-      out[idx].capital_steady_state = a * l;
+      let numer = exo.saving * out[idx].technology;
+      let denom = exo.depreciation;
+      let expon = 1.0/exo.alpha;
+      let labor = labourForce[idx] * (1 - unemployment[idx]);
+      out[idx].capital_steady_state = labor * pow(numer/denom, expon);
     }
   </script>
 </body>
