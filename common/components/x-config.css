@@ -1,3 +1,8 @@
+:root {
+  color: var(--color-fg);
+  background: var(--color-bg);
+}
+
 .fields {
   display: grid;
   grid-template-columns: 1fr;

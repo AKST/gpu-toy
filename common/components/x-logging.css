@@ -1,4 +1,7 @@
 :host {
+  color: var(--color-fg);
+  background: var(--color-bg);
+
   position: relative;
   display: block;
   overflow: auto;
@@ -26,7 +29,7 @@ tr:first-child {
 th {
   text-align: left;
   position: sticky;
-  background: white;
+  background: var(--color-bg);
   top: 0;
 }
 td {

@@ -1,3 +1,5 @@
+import { NotebookNavElement } from './common/components/x-navigation.js';
+
 /**
  * @param {URL} url
  */
@@ -20,17 +22,10 @@ function getChrome() {
   return { attr, config, actions, logging };
 }
 
-globalThis.addEventListener('click', event => {
-  const { target } = event;
-  if (
-      target instanceof HTMLAnchorElement &&
-      target.hostname === location.hostname
-  ) {
-    event.preventDefault();
-    const url = new URL(target.href);
-    globalThis.history.pushState({}, '', url);
-    loadApp(url);
-  }
+globalThis.addEventListener('load-example', event => {
+  const url = new URL(event.detail);
+  globalThis.history.pushState({}, '', url);
+  loadApp(url);
 });
 
 globalThis.addEventListener('cfg-update', event => {
@@ -68,5 +63,4 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-console.clear();
 loadApp(new URL(globalThis.location.href));

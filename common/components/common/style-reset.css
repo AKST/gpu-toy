@@ -1,0 +1,25 @@
+a {
+  color: var(--color-fg-link);
+  &:visited {
+    color: var(--color-fg-link-visited);
+  }
+}
+
+input {
+  color: var(--color-fg);
+  border-color: var(--color-border);
+  background-color: var(--color-bg);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-block: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.5;
+}
+
+p, li, quote, label {
+  line-height: 1.1;
+}
+

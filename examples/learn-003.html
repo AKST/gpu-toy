@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="application-name" content="TFP Growth Model" lang="en" />
+  <meta name="description" content="Compute a TFP growth model based on phone adoption via WebGPU">
   <link rel="stylesheet" href="../common/frame-style.css">
   <title>Web GPU - Line Graph</title>
 </head>
@@ -10,11 +12,13 @@
   <script>
     window.addEventListener('error', event => console.error(event.error));
     window.addEventListener('unhandledrejection', event => console.error(event.error));
+
+    if (window.parent == null) alert('note this page was designed to run in an iframe');
   </script>
   <script type="module">
     import * as csv from '../common/data/csv.js';
     import * as datasets from '../common/data/datasets.js';
-    import { initWebGPU } from '../common/init.js';
+    import { initWebGPU } from '../common/webgpu/init.js';
     import { createBuffer, createStep, createMapping } from '../common/webgpu/setup.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
 

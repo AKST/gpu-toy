@@ -8,7 +8,7 @@
 </head>
 <body>
   <script type="module">
-    import { initWebGPU } from '../common/init.js';
+    import { initWebGPU } from '../common/webgpu/init.js';
     const { canvas, adapter, device } = await initWebGPU();
     const context = canvas.getContext('webgpu');
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();

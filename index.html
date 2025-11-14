@@ -3,8 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="application-name" content="WebGPU notebook" lang="en">
+  <meta name="author" content="Angus Thomsen">
+  <meta name="description" content="A webapp to add an interactive chrome on top of WebGPU examples">
+  <meta name="keywords" content="WebGPU,Economics,Graphics,AKST">
+  <link rel="stylesheet" href="./common/components/common/style-reset.css">
+  <link rel="modulepreload" href="./common/components/common/dom-kit.js">
   <title>WebGPU Notebook</title>
+  <script>
+    {
+      console.clear();
+      const preferDarkMode = window.matchMedia("(prefers-color-scheme: dark)");
+      const className = preferDarkMode ? 'dark-mode' : 'light-mode';
+      document.head.parentNode.classList.add(className);
+    }
+  </script>
   <style>
+    .light-mode {
+      --color-fg-link: blue;
+      --color-fg-link-visited: purple;
+      --color-fg: black;
+      --color-bg: white;
+      --color-border: black;
+    }
+    .dark-mode {
+      --color-fg-link: cyan;
+      --color-fg-link-visited: pink;
+      --color-fg: white;
+      --color-bg: black;
+      --color-border: white;
+    }
+
     * { box-sizing: border-box; }
     iframe { border: none; }
     body, html {
@@ -12,6 +41,8 @@
       padding: 0;
       height: 100%;
       max-height: 100dvh;
+      color: var(--color-fg);
+      background: var(--color-bg);
     }
     body {
       display: grid;
@@ -23,9 +54,9 @@
       grid-template-columns: auto auto;
       justify-content: space-between;
       align-items: center;
-
+      border-bottom: 1px var(--color-border) solid;
     }
-    nav, header, footer {
+    header, footer {
       padding-inline: 32px;
     }
 
@@ -35,9 +66,10 @@
     x-config { grid-column: 3 / 4; }
 
     footer {
-      padding-bottom: 16px;
+      padding-block: 8px;
       display: grid;
       grid-template-rows: 1fr auto;
+      border-top: 1px var(--color-border) solid;
     }
 
     main {
@@ -57,18 +89,15 @@
       <x-actions id="actions"></x-actions>
     </div>
   </header>
-  <nav>
-    <h2>Notebooks</h2>
-    <h3>Compute</h3>
-    <ul>
-      <li><a href="?example=learn-003.html">Communication Technology on growth</a></li>
-    </ul>
-    <h3>Learning</h3>
-    <ul>
-      <li><a href="?example=learn-001.html">Basic Triangle</a></li>
-      <li><a href="?example=learn-002.html">Basic Line</a></li>
-    </ul>
-  </nav>
+  <x-navigator>
+    <slot name="section" title="Compute">
+      <a href="?example=learn-003.html">Phones & TFP Growth</a>
+    </slot>
+    <slot name="section" title="Learning">
+      <a href="?example=learn-001.html">Basic Triangle</a>
+      <a href="?example=learn-002.html">Basic Line</a>
+    </slot>
+  </x-navigator>
   <main>
     <iframe height="600px" width="600px"></iframe>
   </main>
@@ -83,6 +112,7 @@
       import("./common/components/x-actions.js"),
       import("./common/components/x-config.js"),
       import("./common/components/x-logging.js"),
+      import("./common/components/x-navigation.js"),
     ]);
   </script>
   <script type="module" src="./index.js"></script>

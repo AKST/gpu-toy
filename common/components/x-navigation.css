@@ -1,0 +1,8 @@
+:host {
+  color: var(--color-fg);
+  background: var(--color-bg);
+  max-width: 240px;
+  border-right: 1px dashed var(--color-border);
+  padding-inline: 16px;
+}
+

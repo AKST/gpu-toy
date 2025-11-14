@@ -1,13 +1,8 @@
-const createTextNode = document.createTextNode.bind(document);
+import { el, createStyleSheetLink } from './common/dom-kit.js';
 
 function createKnob(name, labelText, value) {
-  const label = document.createElement('label');
-  const input = document.createElement('input');
-  input.id = name;
-  input.name = name;
-  input.value = value;
-  label.htmlFor = name;
-  label.appendChild(createTextNode(labelText));
+  const label = el('label', { htmlFor: name }, [labelText]);
+  const input = el('input', { id: name, name, value });
   return [label, input];
 }
 
@@ -15,28 +10,20 @@ export class ConfigSideBarElement extends HTMLElement {
   #root = this.attachShadow({ mode: "open" });
 
   connectedCallback() {
-    const cssLink = document.createElement('link')
-    cssLink.rel = 'stylesheet';
-    cssLink.href = import.meta.resolve('./x-config.css');
+    const cssLinks = [
+      import.meta.resolve('./common/style-reset.css'),
+      import.meta.resolve('./x-config.css'),
+    ].map(createStyleSheetLink)
 
-    const form = this.form = document.createElement('form');
-    const fieldSet = this.fieldset = document.createElement('fieldset')
-    const fields = this.fields = document.createElement('div');
-    fields.className = 'fields';
+    const form = el('form', {}, [
+      el('fieldset', {}, [
+        el('legend', {}, ['Knobs']),
+        this.fields = el('div', { class: 'fields' }),
+        el('input', { type: 'submit', value: 'Submit' }),
+      ]),
+    ]);
 
-    const submit = document.createElement('input');
-    submit.type = 'submit';
-    submit.value = 'Submit';
-
-    const legend = document.createElement('legend');
-    legend.appendChild(createTextNode('Knobs'));
-    fieldSet.appendChild(legend);
-    fieldSet.appendChild(fields);
-    fieldSet.appendChild(submit);
-    form.appendChild(fieldSet);
-
-
-    this.#root.replaceChildren(cssLink, form);
+    this.#root.replaceChildren(...cssLinks, form);
     this.flush();
 
     form.addEventListener('submit', event => {
@@ -48,7 +35,7 @@ export class ConfigSideBarElement extends HTMLElement {
   }
 
   setKnobs(knobs) {
-    this.fieldset.style.display = 'block';
+    this.#setFieldsetDisplay('block');
     for (const { name, label: labelText, init } of knobs) {
       const [label, input] = createKnob(name, labelText, init);
       this.fields.appendChild(label);
@@ -58,7 +45,11 @@ export class ConfigSideBarElement extends HTMLElement {
 
   flush() {
     this.fields.replaceChildren();
-    this.fieldset.style.display = 'none';
+    this.#setFieldsetDisplay('none');
+  }
+
+  #setFieldsetDisplay(display) {
+    this.#root.querySelector('fieldset').style = display;
   }
 }
 
