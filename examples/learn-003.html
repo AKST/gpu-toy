@@ -52,12 +52,12 @@
       { type: 'u32', size: 4, init: 25, name: 'year_per_country' },
       { type: 'u32', size: 4, init: size, name: 'observations' },
       { type: 'u32', size: 4, init: inits.size, name: 'countries' },
-      { type: 'u32', size: 4, init: 25, name: '_padding' },
+      { type: 'u32', size: 4, init: 10, name: 'ralph_newton_iterations' },
     ]);
 
     const uniformExo = UniformAdapter.create([
       { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
-      { type: 'f32', size: 4, init: 0.9, name: 'saving' },
+      { type: 'f32', size: 4, init: 0.4, name: 'saving' },
       { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
       { type: 'f32', size: 4, init: INITIAL_TECH, name: 'tech_init' },
     ]);
@@ -135,6 +135,7 @@
 
     console.log('test');
     await runGPU();
+    console.log(df);
 
     const errorScope = await device.popErrorScope();
     if (errorScope) {
@@ -393,6 +394,7 @@
       year_per_country: u32,
       observations: u32,
       countries: u32,
+      ralph_newton_iterations: u32,
     };
 
     struct Effects {
@@ -429,6 +431,41 @@
     @group(0) @binding(31) var<storage, read> labourForce: array<f32>;
 
     /**
+     * Uses ralph newton to solve for capital
+     * https://en.wikipedia.org/wiki/Newton%27s_method
+     *
+     * - Basically inline Y into K, creating a simulatenous equation
+     * - Move everything on to one side where the other side is zero
+     * - Turn the left hand side into a function that takes K as param
+     * - Then get a derivative by deriving it by K
+     *
+     * Knowing this we can brute force different values of K until
+     * we get a function that produces zero or a sufficently small
+     * number that we are're satisified.
+     */
+    fn ralph_newton_capital(k_last: f32, t: f32, l: f32) -> f32 {
+      var k = max(k_last, 1.0);
+      let base_term = k_last * (1.0 - exo.depreciation);
+      let coeff = exo.saving * t * pow(l, exo.alpha);
+
+      for (var i = 0u; i < config.ralph_newton_iterations; i++) {
+        let k_pow_beta = pow(k, 1.0 - exo.alpha);
+        let k_pow_neg_alpha = pow(k, -exo.alpha);
+        let f = k - coeff * k_pow_beta - base_term;
+        let f_prime = 1.0 - coeff * (1.0 - exo.alpha) * k_pow_neg_alpha;
+        let k_new = k - f / f_prime;
+
+        if (abs(k_new - k) < 1e-6 * abs(k)) {
+          return k_new;
+        } else {
+          k = k_new;
+        }
+      }
+
+      return k;
+    }
+
+    /**
      * Computes technology over the different periods
      */
     @compute @workgroup_size(1)
@@ -446,10 +483,7 @@
         let t = t_growth_phone + t_growth_net + t_last;
         let l = labourForce[idx] * (1 - unemployment[idx]/100);
 
-        // TODO(fix) k & y are simultaneous equations, so:
-        //   - we need rewrite the logic to compute k_next so that it doesn't reference y
-        //   - one such method of computing k is using the ralph newton method
-        let k = 1.0 * exo.saving + k_last * (1 - exo.depreciation);
+        let k = ralph_newton_capital(k_last, t, l);
         let y = t * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
 
         k_last = k;
