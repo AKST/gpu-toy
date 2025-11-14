@@ -166,14 +166,16 @@
         await mapping.read();
 
         for (let i = 0; i < size; i++) {
-          df.technology[i] = combinedOutputData[i * 4 + 0];
-          df.capital[i] = combinedOutputData[i * 4 + 1];
-          df.capitalSteadyState[i] = combinedOutputData[i * 4 + 2];
-          df.output[i] = combinedOutputData[i * 4 + 3];
+          df.technology[i] = combinedOutputData[i * 5 + 0];
+          df.capital[i] = combinedOutputData[i * 5 + 1];
+          df.capitalSteadyState[i] = combinedOutputData[i * 5 + 2];
+          df.output[i] = combinedOutputData[i * 5 + 3];
+          df.employed[i] = combinedOutputData[i * 5 + 4]
         }
 
         showLog('Output results:', [...df.output.slice(0, 10)]);
         showLog('Captial results:', [...df.capital.slice(0, 10)]);
+        showLog('Employed results:', [...df.employed.slice(0, 10)]);
         showLog('Technology results:', [...df.technology.slice(0, 10)]);
         showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
@@ -221,7 +223,6 @@
               csv.dropColumn(df, [
                 'countryId',
                 'technology',
-                'initialTech',
                 'capitalSteadyState',
                 'capital',
                 'output',
@@ -328,8 +329,8 @@
 
       const size = csv.getSize(join);
       join.technology = new Float32Array(size);
-      join.initialTech = new Float32Array(size);
       join.capitalSteadyState = new Float32Array(size);
+      join.employed = new Float32Array(size);
       join.capital = new Float32Array(size);
       join.output = new Float32Array(size);
 
@@ -368,10 +369,6 @@
             diff[offset + i] = sum[offset + i] - sum[offset + i - 1];
           }
         }
-      }
-
-      for (let i = 0; i < size; i++) {
-        join.initialTech[i] = INITIAL_TECH;
       }
 
       const initCapital = Array.from(joinGroup.groups.keys(), country => {
@@ -417,6 +414,7 @@
       capital: f32,
       capital_steady_state: f32,
       output: f32,
+      employed: f32,
     }
 
     @group(1) @binding(0) var<uniform> exo: ExogenousState;
@@ -494,6 +492,7 @@
 
         out[idx].output = y;
         out[idx].capital = k;
+        out[idx].employed = l;
         out[idx].technology = t;
       }
     }
@@ -506,8 +505,7 @@
       let numer = exo.saving * out[idx].technology;
       let denom = exo.depreciation;
       let expon = 1.0/exo.alpha;
-      let labor = labourForce[idx] * (1 - unemployment[idx]);
-      out[idx].capital_steady_state = labor * pow(numer/denom, expon);
+      out[idx].capital_steady_state = out[idx].employed * pow(numer/denom, expon);
     }
   </script>
 </body>
