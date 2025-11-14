@@ -8,27 +8,35 @@ function withSlot(slot) {
   );
 }
 
+const links = [
+  import.meta.resolve('./common/style-reset.css'),
+  import.meta.resolve('./x-navigation.css'),
+];
+
 export class NotebookNavElement extends HTMLElement {
   #root = this.attachShadow({ mode: "open" });
 
   connectedCallback() {
     this.#root.addEventListener('click', event => {
+      const target = event.target.closest('a');
+      if (target == null) return;
+
       event.preventDefault();
+      const parsed = new URL(target.href);
+      const detail = new URL(globalThis.location+'');
+      detail.searchParams.set('example', parsed.searchParams.get('example'));
+
       this.dispatchEvent(new CustomEvent('load-example', {
-        detail: event.target.href,
+        detail,
         bubbles: true,
       }));
     });
 
-    const slots = this.querySelectorAll('slot[name=section]');
-    const title = document.createElement('h2');
-    const styles = [
-      import.meta.resolve('./common/style-reset.css'),
-      import.meta.resolve('./x-navigation.css'),
-    ].map(createStyleSheetLink);
-
-    title.innerText = 'Notebooks';
-    this.#root.replaceChildren(...styles, title, ...Array.from(slots, withSlot));
+    this.#root.replaceChildren(
+      ...links.map(createStyleSheetLink),
+      el('h2', {}, ['Notebooks']),
+      ...Array.from(this.querySelectorAll('slot[name=section]'), withSlot),
+    );
   }
 }
 

@@ -11,7 +11,7 @@ export function loadApp({ searchParams }) {
   config.flush?.();
   actions.flush?.();
   logging.flush?.();
-  iframe.src = `./examples/${app}`;
+  iframe.src = `./examples/${app}.html`;
 }
 
 function getChrome() {
@@ -23,9 +23,8 @@ function getChrome() {
 }
 
 globalThis.addEventListener('load-example', event => {
-  const url = new URL(event.detail);
-  globalThis.history.pushState({}, '', url);
-  loadApp(url);
+  globalThis.history.pushState({}, '', event.detail);
+  loadApp(event.detail);
 });
 
 globalThis.addEventListener('cfg-update', event => {
@@ -63,4 +62,4 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-loadApp(new URL(globalThis.location.href));
+loadApp(new URL(globalThis.location+''));

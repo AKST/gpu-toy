@@ -1,17 +1,17 @@
+import { el, createStyleSheetLink } from './common/dom-kit.js';
+
 export class AttributionElement extends HTMLElement {
   #root = this.attachShadow({ mode: "open" });
 
   setAttribution(title, link) {
     this.flush();
-    const p = document.createElement('p');
-    const a = document.createElement('a');
-    p.appendChild(document.createTextNode('Source: '));
-    p.appendChild(a);
-    a.appendChild(document.createTextNode(title));
-    a.target = '_blank';
-    a.href = link;
-
-    this.#root.appendChild(p);
+    this.#root.replaceChildren(
+      createStyleSheetLink(import.meta.resolve('./common/style-reset.css')),
+      el('p', {}, [
+        'Source: ',
+        el('a', { target: '_blank', href: link }, [title]),
+      ]),
+    );
   }
 
   flush() {
