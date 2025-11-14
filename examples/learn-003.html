@@ -24,10 +24,16 @@
 
     const INITIAL_TECH = 1_000;
 
+
+    const uniformCfg = UniformAdapter.create([
+      { size: 4, init: 25, name: 'year_per_country' },
+    ]);
+
     const uniformExo = UniformAdapter.create([
       { size: 4, init: 2/3, name: 'alpha' },
-      { size: 4, init: 0.4, name: 'saving' },
+      { size: 4, init: 0.9, name: 'saving' },
       { size: 4, init: 0.07, name: 'depreciation' },
+      { size: 4, init: INITIAL_TECH, name: 'tech_init' },
     ]);
 
     const uniformEff = UniformAdapter.create([
@@ -54,21 +60,24 @@
     });
 
     const { canvas, adpater, device } = await initWebGPU();
-    const [size, groups, df] = await setupData();
+    const [size, groups, df, offsets] = await setupData();
+    showLog('offsets', [...offsets]);
 
     device.pushErrorScope('validation');
 
     const { COPY_DST, COPY_SRC } = GPUBufferUsage;
+    const bufferNationOffset = createBuffer(device, offsets, COPY_DST);
     const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
     const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
-    const bufferPrevTechnology = createBuffer(device, df.initialTech, COPY_DST);
     const bufferTechnology = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
     const bufferOutput = createBuffer(device, df.output, COPY_SRC | COPY_DST);
+    const bufferCapital = createBuffer(device, df.capital, COPY_SRC | COPY_DST);
     const bufferCapitalSteadyState = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
     const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
     const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
     const bufferUnifExo = uniformExo.createBuffer(device);
     const bufferUnifEff = uniformEff.createBuffer(device);
+    const bufferUnifCfg = uniformCfg.createBuffer(device);
 
     const uniformBindGrp = [
       { binding: 0, resource: { buffer: bufferUnifExo } },
@@ -86,17 +95,21 @@
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 1, resource: { buffer: bufferUnifEff } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
-      workGroups: size,
+      workGroups: offsets.length,
       entryPoint: 'step1',
       entries: [
-        { binding: 0, resource: { buffer: bufferTechnology } },
-        { binding: 1, resource: { buffer: bufferOutput } },
-        { binding: 2, resource: { buffer: bufferPhoneUsage } },
-        { binding: 3, resource: { buffer: bufferPhoneInternet } },
-        { binding: 4, resource: { buffer: bufferPrevTechnology } },
-        { binding: 5, resource: { buffer: bufferUnemployment } },
-        { binding: 6, resource: { buffer: bufferLabourForce } },
+        { binding: 0, resource: { buffer: bufferNationOffset } },
+
+        { binding: 1, resource: { buffer: bufferTechnology } },
+        { binding: 2, resource: { buffer: bufferOutput } },
+        { binding: 3, resource: { buffer: bufferCapital } },
+
+        { binding: 4, resource: { buffer: bufferPhoneUsage } },
+        { binding: 5, resource: { buffer: bufferPhoneInternet } },
+        { binding: 6, resource: { buffer: bufferUnemployment } },
+        { binding: 7, resource: { buffer: bufferLabourForce } },
       ],
     });
 
@@ -112,8 +125,8 @@
       entries: [
         { binding: 0, resource: { buffer: bufferCapitalSteadyState } },
         { binding: 1, resource: { buffer: bufferTechnology } },
-        { binding: 5, resource: { buffer: bufferUnemployment } },
-        { binding: 6, resource: { buffer: bufferLabourForce } },
+        { binding: 6, resource: { buffer: bufferUnemployment } },
+        { binding: 7, resource: { buffer: bufferLabourForce } },
       ],
     });
 
@@ -139,8 +152,8 @@
 
       showLog('Observations:', csv.getSize(df));
       showLog('Countries:', groups.groupValues.length);
-      showLog('Technology results:', df.technology.slice(0, 10));
-      showLog('Capital steady state results:', df.capitalSteadyState.slice(0, 10));
+      showLog('Technology results:', [...df.technology.slice(0, 10)]);
+      showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
       console.info(df, groups);
     }
 
@@ -334,44 +347,72 @@
         join.initialTech[i] = INITIAL_TECH;
       }
 
-      console.log(joinGroup);
-      return [size, joinGroup, join];
+      const offsets = new Uint32Array(
+        Array.from(joinGroup.groups.values(), row => (
+          row.offset
+        )),
+      );
+      return [size, joinGroup, join, offsets];
     }
   </script>
   <script type="text/wgsl" id="compute-shader">
+    struct Config {
+      yearsPerCountry: u32,
+    };
+
     struct Effects {
-      phoneFixed: f32,
-      internetExp: f32,
+      phone_fixed: f32,
+      net_exp: f32,
     };
 
     struct ExogenousState {
       alpha: f32,
       saving: f32,
       depreciation: f32,
+      tech_init: f32,
     };
 
-    @group(1) @binding(0) var<uniform> exogenous: ExogenousState;
+    @group(1) @binding(0) var<uniform> exo: ExogenousState;
     @group(1) @binding(1) var<uniform> effects: Effects;
+    @group(1) @binding(2) var<uniform> config: Config;
 
-    @group(0) @binding(0) var<storage, read_write> technology: array<f32>;
-    @group(0) @binding(1) var<storage, read_write> output: array<f32>;
-    @group(0) @binding(2) var<storage, read> phoneAccessGrowth: array<f32>;
-    @group(0) @binding(3) var<storage, read> phoneInternetGrowth: array<f32>;
-    @group(0) @binding(4) var<storage, read> prevTechnology: array<f32>;
-    @group(0) @binding(5) var<storage, read> unemployment: array<f32>;
-    @group(0) @binding(6) var<storage, read> labourForce: array<f32>;
+    @group(0) @binding(0) var<storage, read> offsets: array<u32>;
+    @group(0) @binding(1) var<storage, read_write> technology: array<f32>;
+    @group(0) @binding(2) var<storage, read_write> output: array<f32>;
+    @group(0) @binding(3) var<storage, read_write> capital: array<f32>;
+
+    @group(0) @binding(4) var<storage, read> growth_phoneuse: array<f32>;
+    @group(0) @binding(5) var<storage, read> growth_netuse: array<f32>;
+    @group(0) @binding(6) var<storage, read> unemployment: array<f32>;
+    @group(0) @binding(7) var<storage, read> labourForce: array<f32>;
 
     /**
      * Computes technology over the different periods
      */
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
-      let idx = global_id.x;
-      let l = labourForce[idx] * (1 - unemployment[idx]);
-      technology[idx] = phoneAccessGrowth[idx] * effects.phoneFixed
-                      + phoneInternetGrowth[idx] * effects.internetExp
-                      + prevTechnology[idx];
-      output[idx] = technology[idx] * pow(l, exogenous.alpha);
+      let offset = offsets[global_id.x];
+      var t_last = exo.tech_init;
+      var k_last = capital[offset];
+      var y_last = output[offset];
+
+      for (var i = 0u; i < config.yearsPerCountry; i++) {
+        let idx = offset + i;
+
+        let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
+        let t_growth_net = growth_netuse[idx] * effects.net_exp;
+        let t_next = t_growth_phone + t_growth_net + t_last;
+        let l_next = labourForce[idx] * (1 - unemployment[idx]);
+        let k_next = exo.saving * y_last - exo.depreciation * k_last;
+        let y_next = t_next * pow(l_next, exo.alpha) * pow(k_next, 1 - exo.alpha);
+
+        y_last = y_next;
+        k_last = k_next;
+        t_last = t_next;
+        output[idx] = y_next;
+        capital[idx] = k_next;
+        technology[idx] = t_next;
+      }
     }
 
 
@@ -381,11 +422,9 @@
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-      let a = exogenous.alpha * technologyInput[idx];
+      let a = exo.alpha * technologyInput[idx];
       let l = labourForce[idx] * (1 - unemployment[idx]);
-      capitalSteadyState[idx] = exogenous.alpha * technologyInput[idx];
-
-
+      capitalSteadyState[idx] = exo.alpha * technologyInput[idx];
     }
   </script>
 </body>
