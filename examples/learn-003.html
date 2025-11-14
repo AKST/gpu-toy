@@ -83,7 +83,10 @@
       device,
       shaderModule,
       commandEncoder,
-      uniforms: uniformBindGrp,
+      uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 1, resource: { buffer: bufferUnifEff } },
+      ],
       workGroups: size,
       entryPoint: 'step1',
       entries: [
@@ -101,7 +104,9 @@
       device,
       shaderModule,
       commandEncoder,
-      uniforms: uniformBindGrp,
+      uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
+      ],
       workGroups: Math.ceil(size / 64),
       entryPoint: 'step2',
       entries: [
