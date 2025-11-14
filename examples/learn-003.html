@@ -43,7 +43,7 @@
         { name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
         { name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
         { name: 'technology', label: '(A₀) (TFP Init)', init: 1000 },
-        { name: 'deprecation', label: '(d̄) Deprecation Rate', init: 0.07 },
+        { name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
         { name: 'phoneEffect', label: '𝛽 Phone Effect', init: 0.001 },
         { name: 'phoneInternet', label: '𝛽 Internet Effect', init: 0.001 },
       ],
@@ -209,6 +209,7 @@
     }
 
     async function updateUniforms(data) {
+      console.log(data);
       uniformExo.update('alpha', data.alpha);
       uniformExo.update('saving', data.saving);
       uniformExo.update('depreciation', data.depreciation);

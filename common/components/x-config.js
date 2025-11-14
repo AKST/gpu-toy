@@ -30,6 +30,7 @@ export class ConfigSideBarElement extends HTMLElement {
       event.preventDefault();
       const formData = new FormData(form);
       const detail = Object.fromEntries(formData.entries());
+      for (const k of Object.keys(detail)) detail[k] = parseFloat(detail[k]);
       this.dispatchEvent(new CustomEvent('cfg-update', { detail, bubbles: true, composed: true }));
     });
   }
