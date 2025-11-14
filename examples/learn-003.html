@@ -24,23 +24,6 @@
 
     const INITIAL_TECH = 1_000;
 
-
-    const uniformCfg = UniformAdapter.create([
-      { size: 4, init: 25, name: 'year_per_country' },
-    ]);
-
-    const uniformExo = UniformAdapter.create([
-      { size: 4, init: 2/3, name: 'alpha' },
-      { size: 4, init: 0.9, name: 'saving' },
-      { size: 4, init: 0.07, name: 'depreciation' },
-      { size: 4, init: INITIAL_TECH, name: 'tech_init' },
-    ]);
-
-    const uniformEff = UniformAdapter.create([
-      { size: 4, init: 0.001, name: 'phoneEffect' },
-      { size: 4, init: 0.001, name: 'phoneInternet' },
-    ]);
-
     window.addEventListener('message', onMessage);
     window.parent?.postMessage({
       kind: 'register-button',
@@ -64,6 +47,24 @@
     showLog('Observations:', csv.getSize(df));
     showLog('Countries:', groups.groupValues.length);
     showLog('Nation Offsets', [...inits.offsets]);
+
+    const uniformCfg = UniformAdapter.create([
+      { size: 4, init: 25, name: 'year_per_country' },
+      { size: 4, init: size, name: 'observations' },
+      { size: 4, init: inits.size, name: 'countries' },
+    ]);
+
+    const uniformExo = UniformAdapter.create([
+      { size: 4, init: 2/3, name: 'alpha' },
+      { size: 4, init: 0.9, name: 'saving' },
+      { size: 4, init: 0.07, name: 'depreciation' },
+      { size: 4, init: INITIAL_TECH, name: 'tech_init' },
+    ]);
+
+    const uniformEff = UniformAdapter.create([
+      { size: 4, init: 0.001, name: 'phoneEffect' },
+      { size: 4, init: 0.001, name: 'phoneInternet' },
+    ]);
 
     device.pushErrorScope('validation');
 
@@ -130,7 +131,7 @@
       ],
     });
 
-    // await runGPU();
+    await runGPU();
 
     const errorScope = await device.popErrorScope();
     if (errorScope) {
@@ -381,7 +382,9 @@
   </script>
   <script type="text/wgsl" id="compute-shader">
     struct Config {
-      yearsPerCountry: u32,
+      year_per_country: u32,
+      observations: u32,
+      countries: u32,
     };
 
     struct Effects {
@@ -422,12 +425,13 @@
      */
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      if (global_id.x >= config.countries) { return; }
       let offset = offsets[global_id.x];
       var k_last = capital_init[global_id.x];
       var t_last = exo.tech_init;
       var y_last = 1.0;
 
-      for (var i = 0u; i < config.yearsPerCountry; i++) {
+      for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
 
         let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
@@ -449,6 +453,7 @@
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      if (global_id.x >= config.observations) { return; }
       let idx = global_id.x;
       let a = exo.alpha * out[idx].technology;
       let l = labourForce[idx] * (1 - unemployment[idx]);
