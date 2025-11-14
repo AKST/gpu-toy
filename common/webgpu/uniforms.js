@@ -1,5 +1,5 @@
 /**
- * @typedef {{ name: string, size: number, init: number }} UniformDef
+ * @typedef {{ name: string, size: number, init: number, type?: 'f32' | 'u32' }} UniformDef
  */
 
 export class UniformAdapter {
@@ -18,9 +18,9 @@ export class UniformAdapter {
   static create(uniformDef) {
     const state = {};
     const uniforms = [];
-    for (const { name, init, size } of uniformDef) {
+    for (const { name, init, size, type } of uniformDef) {
       state[name] = init;
-      uniforms.push({ name, size });
+      uniforms.push({ name, size, type: type || 'f32' });
     }
     return new UniformAdapter(uniforms, state);
   }
@@ -51,19 +51,28 @@ export class UniformAdapter {
    * @param {GPUBuffer} buffer
    */
   updateBuffer(device, buffer) {
-    const data = new Float32Array(this.bufferSize / 4);
+    const arrayBuffer = new ArrayBuffer(this.bufferSize);
+    const dataAsFloat = new Float32Array(arrayBuffer);
+    const dataAsUint = new Uint32Array(arrayBuffer);
 
     let offset = 0;
     for (const uniform of this.uniforms) {
       const alignment = Math.min(uniform.size, 16);
       offset = Math.ceil(offset / alignment) * alignment;
       const value = this.state[uniform.name];
-      const floatOffset = offset / 4;
-      if (uniform.size === 4) data[floatOffset] = value;
+      const idx = offset / 4;
+
+      if (uniform.size === 4) {
+        if (uniform.type === 'u32') {
+          dataAsUint[idx] = value;
+        } else {
+          dataAsFloat[idx] = value;
+        }
+      }
       offset += uniform.size;
     }
 
-    device.queue.writeBuffer(buffer, 0, data);
+    device.queue.writeBuffer(buffer, 0, arrayBuffer);
   }
 
   /**

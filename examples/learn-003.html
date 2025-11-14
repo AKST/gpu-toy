@@ -49,21 +49,22 @@
     showLog('Nation Offsets', [...inits.offsets]);
 
     const uniformCfg = UniformAdapter.create([
-      { size: 4, init: 25, name: 'year_per_country' },
-      { size: 4, init: size, name: 'observations' },
-      { size: 4, init: inits.size, name: 'countries' },
+      { type: 'u32', size: 4, init: 25, name: 'year_per_country' },
+      { type: 'u32', size: 4, init: size, name: 'observations' },
+      { type: 'u32', size: 4, init: inits.size, name: 'countries' },
+      { type: 'u32', size: 4, init: 25, name: '_padding' },
     ]);
 
     const uniformExo = UniformAdapter.create([
-      { size: 4, init: 2/3, name: 'alpha' },
-      { size: 4, init: 0.9, name: 'saving' },
-      { size: 4, init: 0.07, name: 'depreciation' },
-      { size: 4, init: INITIAL_TECH, name: 'tech_init' },
+      { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
+      { type: 'f32', size: 4, init: 0.9, name: 'saving' },
+      { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
+      { type: 'f32', size: 4, init: INITIAL_TECH, name: 'tech_init' },
     ]);
 
     const uniformEff = UniformAdapter.create([
-      { size: 4, init: 0.001, name: 'phoneEffect' },
-      { size: 4, init: 0.001, name: 'phoneInternet' },
+      { type: 'f32', size: 4, init: 0.001, name: 'phoneEffect' },
+      { type: 'f32', size: 4, init: 0.001, name: 'phoneInternet' },
     ]);
 
     device.pushErrorScope('validation');
@@ -73,7 +74,7 @@
     const bufferNationCapitalInit = createBuffer(device, inits.capital, COPY_DST);
 
     // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
-    const combinedOutputData = new Float32Array(size * 4);
+    const combinedOutputData = new Float32Array(new Array(size * 4).fill(0));
     const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
 
     const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
@@ -121,6 +122,7 @@
       shaderModule,
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: Math.ceil(size / 64),
       entryPoint: 'step2',
@@ -131,12 +133,16 @@
       ],
     });
 
+    console.log('test');
     await runGPU();
 
     const errorScope = await device.popErrorScope();
     if (errorScope) {
       console.error('GPU:',errorScope.message);
+      showLog('error', errorScope.message);
       console.info(errorScope);
+    } else {
+      showLog('done');
     }
 
     async function runGPU() {
@@ -164,6 +170,8 @@
           df.output[i] = combinedOutputData[i * 4 + 3];
         }
 
+        showLog('Output results:', [...df.output.slice(0, 10)]);
+        showLog('Captial results:', [...df.capital.slice(0, 10)]);
         showLog('Technology results:', [...df.technology.slice(0, 10)]);
         showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
@@ -426,35 +434,38 @@
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (global_id.x >= config.countries) { return; }
-      let offset = offsets[global_id.x];
-      var k_last = capital_init[global_id.x];
-      var t_last = exo.tech_init;
-      var y_last = 1.0;
+      let offset: u32 = offsets[global_id.x];
+      var k_last: f32 = capital_init[global_id.x];
+      var t_last: f32 = exo.tech_init;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
 
         let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
         let t_growth_net = growth_netuse[idx] * effects.net_exp;
-        let t_next = t_growth_phone + t_growth_net + t_last;
-        let l_next = labourForce[idx] * (1 - unemployment[idx]);
-        let k_next = (exo.saving * y_last) - (exo.depreciation * k_last);
-        let y_next = t_next * pow(l_next, exo.alpha) * pow(k_next, 1 - exo.alpha);
+        let t = t_growth_phone + t_growth_net + t_last;
+        let l = labourForce[idx] * (1 - unemployment[idx]/100);
 
-        y_last = y_next;
-        k_last = k_next;
-        t_last = t_next;
+        // TODO(fix) k & y are simultaneous equations, so:
+        //   - we need rewrite the logic to compute k_next so that it doesn't reference y
+        //   - one such method of computing k is using the ralph newton method
+        let k = 1.0 * exo.saving + k_last * (1 - exo.depreciation);
+        let y = t * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
 
-        out[idx].output = y_next;
-        out[idx].capital = k_next;
-        out[idx].technology = t_next;
+        k_last = k;
+        t_last = t;
+
+        out[idx].output = y;
+        out[idx].capital = k;
+        out[idx].technology = t;
       }
     }
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
-      if (global_id.x >= config.observations) { return; }
       let idx = global_id.x;
+      if (idx >= config.observations) { return; }
+
       let a = exo.alpha * out[idx].technology;
       let l = labourForce[idx] * (1 - unemployment[idx]);
       out[idx].capital_steady_state = a * l;

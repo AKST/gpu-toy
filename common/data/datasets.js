@@ -81,7 +81,7 @@ export const wbLabourForce = {
 };
 
 export const wbUnemployment = {
-  url: '../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv',
+  url: '../files/API_SL.UEM.TOTL.ZS_DS2_en_csv_v2_130165.csv',
   dropRows: 4,
   headers: {
     load: wbColumns,
