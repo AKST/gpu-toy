@@ -61,7 +61,8 @@
 
     const { canvas, adpater, device } = await initWebGPU();
     const [size, groups, df, inits] = await setupData();
-    showLog('Nations', inits.size);
+    showLog('Observations:', csv.getSize(df));
+    showLog('Countries:', groups.groupValues.length);
     showLog('Nation Offsets', [...inits.offsets]);
 
     device.pushErrorScope('validation');
@@ -89,12 +90,10 @@
 
     const shaderCode = document.getElementById('compute-shader').textContent;
     const shaderModule = device.createShaderModule({ code: shaderCode });
-    const commandEncoder = device.createCommandEncoder();
 
     const step1 = createStep({
       device,
       shaderModule,
-      commandEncoder,
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 1, resource: { buffer: bufferUnifEff } },
@@ -119,7 +118,6 @@
     const step2 = createStep({
       device,
       shaderModule,
-      commandEncoder,
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
       ],
@@ -141,22 +139,36 @@
     }
 
     async function runGPU() {
-      const pass = commandEncoder.beginComputePass();
-      step1.loadIntoPass(pass);
-      step2.loadIntoPass(pass);
-      pass.end();
+      try {
+        const commandEncoder = device.createCommandEncoder();
+        const pass = commandEncoder.beginComputePass();
+        step1.loadIntoPass(pass);
+        step2.loadIntoPass(pass);
+        pass.end();
 
-      const mapping1 = createMapping(device, commandEncoder, bufferTechnology, df.technology);
-      const mapping2 = createMapping(device, commandEncoder, bufferCapitalSteadyState, df.capitalSteadyState);
-      device.queue.submit([commandEncoder.finish()]);
-      await mapping1.read();
-      await mapping2.read();
+        const mapping = createMapping(
+          device,
+          commandEncoder,
+          bufferCombinedOutput,
+          combinedOutputData,
+        );
 
-      showLog('Observations:', csv.getSize(df));
-      showLog('Countries:', groups.groupValues.length);
-      showLog('Technology results:', [...df.technology.slice(0, 10)]);
-      showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
-      console.info(df, groups);
+        device.queue.submit([commandEncoder.finish()]);
+        await mapping.read();
+
+        for (let i = 0; i < size; i++) {
+          df.technology[i] = combinedOutputData[i * 4 + 0];
+          df.capital[i] = combinedOutputData[i * 4 + 1];
+          df.capitalSteadyState[i] = combinedOutputData[i * 4 + 2];
+          df.output[i] = combinedOutputData[i * 4 + 3];
+        }
+
+        showLog('Technology results:', [...df.technology.slice(0, 10)]);
+        showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
+        console.info(df, groups);
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     async function onMessage(event) {
@@ -350,15 +362,14 @@
       }
 
       const initCapital = Array.from(joinGroup.groups.keys(), country => {
-        return csv.findIndex(pwtStock, [
+        const index = csv.findIndex(pwtStock, [
           ['year', year => year === 1999],
           ['countryIso', iso => iso === country],
         ]);
+        return pwtStock.capitalPPP[index];
       });
 
-      const offsets = Array.from(joinGroup.groups.values(), row => (
-        row.offset
-      ));
+      const offsets = Array.from(joinGroup.groups.values(), row => row.offset);
 
       const initalValues = {
         capital: new Float32Array(initCapital),
@@ -435,9 +446,6 @@
         out[idx].technology = t_next;
       }
     }
-
-
-    @group(0) @binding(20) var<storage, read> technologyInput: array<f32>;
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
