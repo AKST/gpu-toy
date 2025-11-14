@@ -28,7 +28,13 @@
     window.parent?.postMessage({
       kind: 'register-button',
       label: 'Download Inputs',
-      id: 'download',
+      id: 'download-inputs',
+    });
+
+    window.parent?.postMessage({
+      kind: 'register-button',
+      label: 'Download All',
+      id: 'download-all',
     });
 
     window.parent?.postMessage({
@@ -75,7 +81,7 @@
     const bufferNationCapitalInit = createBuffer(device, inits.capital, COPY_DST);
 
     // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
-    const combinedOutputData = new Float32Array(new Array(size * 4).fill(0));
+    const combinedOutputData = new Float32Array(new Array(size * 5).fill(0));
     const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
 
     const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
@@ -217,7 +223,7 @@
 
     async function onAction(message) {
       switch (message.id) {
-        case 'download':
+        case 'download-inputs':
           return await csv.downloadFile(
             csv.renameColumn(
               csv.dropColumn(df, [
@@ -226,6 +232,21 @@
                 'capitalSteadyState',
                 'capital',
                 'output',
+              ]),
+              {
+                generatedData: 'faked_askAngusWhatThatMeans',
+                phoneUsageD: 'difference_in_phoneUsage',
+                phoneInternetD: 'difference_in_phoneInternet',
+              },
+            ),
+            'model-inputs.csv',
+          );
+
+        case 'download-all':
+          return await csv.downloadFile(
+            csv.renameColumn(
+              csv.dropColumn(df, [
+                'countryId',
               ]),
               {
                 generatedData: 'faked_askAngusWhatThatMeans',
@@ -445,7 +466,11 @@
      * number that we are're satisified.
      */
     fn ralph_newton_capital(k_last: f32, t: f32, l: f32) -> f32 {
-      var k = max(k_last, 1.0);
+      var k_init = k_last;
+      if (k_last < 0 || k_last != k_last) { k_init = 1.0; }
+      if (t <= 0 || l <= 0) { return k_init; }
+
+      var k = max(k_init, 1.0);
       let base_term = k_last * (1.0 - exo.depreciation);
       let coeff = exo.saving * t * pow(l, exo.alpha);
 
@@ -454,12 +479,16 @@
         let k_pow_neg_alpha = pow(k, -exo.alpha);
         let f = k - coeff * k_pow_beta - base_term;
         let f_prime = 1.0 - coeff * (1.0 - exo.alpha) * k_pow_neg_alpha;
-        let k_new = k - f / f_prime;
 
-        if (abs(k_new - k) < 1e-6 * abs(k)) {
-          return k_new;
+        if (abs(f_prime) < 1e-8) { break; }
+
+        let k_new = k - f / f_prime;
+        let k_safe = max(k_new, 0.1);
+
+        if (abs(k_safe - k) < 1e-6 * abs(k)) {
+          return k_safe;
         } else {
-          k = k_new;
+          k = k_safe;
         }
       }
 
@@ -482,7 +511,7 @@
         let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
         let t_growth_net = growth_netuse[idx] * effects.net_exp;
         let t = t_growth_phone + t_growth_net + t_last;
-        let l = labourForce[idx] * (100.0 - unemployment[idx]) * (1/100.0);
+        let l = labourForce[idx] * (100.0 - unemployment[idx]) * (1.0/100.0);
 
         let k = ralph_newton_capital(k_last, t, l);
         let y = t * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
