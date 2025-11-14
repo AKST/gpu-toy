@@ -359,7 +359,8 @@ export function filterGroups(grouping, cfg, p) {
   const retainedGroups = [];
   for (const groupValue of groupValues) {
     const metadata = groups.get(groupValue);
-    if (p(metadata)) {
+    const retain = p(metadata);
+    if (retain) {
       retainedGroups.push({ groupValue, metadata });
     }
   }

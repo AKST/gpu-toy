@@ -60,19 +60,22 @@
     });
 
     const { canvas, adpater, device } = await initWebGPU();
-    const [size, groups, df, offsets] = await setupData();
-    showLog('offsets', [...offsets]);
+    const [size, groups, df, inits] = await setupData();
+    showLog('Nations', inits.size);
+    showLog('Nation Offsets', [...inits.offsets]);
 
     device.pushErrorScope('validation');
 
     const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-    const bufferNationOffset = createBuffer(device, offsets, COPY_DST);
+    const bufferNationOffset = createBuffer(device, inits.offsets, COPY_DST);
+    const bufferNationCapitalInit = createBuffer(device, inits.capital, COPY_DST);
+
+    // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
+    const combinedOutputData = new Float32Array(size * 4);
+    const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
+
     const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
     const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
-    const bufferTechnology = createBuffer(device, df.technology, COPY_SRC | COPY_DST);
-    const bufferOutput = createBuffer(device, df.output, COPY_SRC | COPY_DST);
-    const bufferCapital = createBuffer(device, df.capital, COPY_SRC | COPY_DST);
-    const bufferCapitalSteadyState = createBuffer(device, df.capitalSteadyState, COPY_SRC | COPY_DST);
     const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
     const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
     const bufferUnifExo = uniformExo.createBuffer(device);
@@ -97,19 +100,19 @@
         { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
-      workGroups: offsets.length,
+      workGroups: inits.size,
       entryPoint: 'step1',
       entries: [
         { binding: 0, resource: { buffer: bufferNationOffset } },
+        { binding: 1, resource: { buffer: bufferNationCapitalInit } },
 
-        { binding: 1, resource: { buffer: bufferTechnology } },
-        { binding: 2, resource: { buffer: bufferOutput } },
-        { binding: 3, resource: { buffer: bufferCapital } },
+        { binding: 10, resource: { buffer: bufferCombinedOutput } },
 
-        { binding: 4, resource: { buffer: bufferPhoneUsage } },
-        { binding: 5, resource: { buffer: bufferPhoneInternet } },
-        { binding: 6, resource: { buffer: bufferUnemployment } },
-        { binding: 7, resource: { buffer: bufferLabourForce } },
+        { binding: 20, resource: { buffer: bufferPhoneUsage } },
+        { binding: 21, resource: { buffer: bufferPhoneInternet } },
+
+        { binding: 30, resource: { buffer: bufferUnemployment } },
+        { binding: 31, resource: { buffer: bufferLabourForce } },
       ],
     });
 
@@ -123,14 +126,13 @@
       workGroups: Math.ceil(size / 64),
       entryPoint: 'step2',
       entries: [
-        { binding: 0, resource: { buffer: bufferCapitalSteadyState } },
-        { binding: 1, resource: { buffer: bufferTechnology } },
-        { binding: 6, resource: { buffer: bufferUnemployment } },
-        { binding: 7, resource: { buffer: bufferLabourForce } },
+        { binding: 10, resource: { buffer: bufferCombinedOutput } },
+        { binding: 30, resource: { buffer: bufferUnemployment } },
+        { binding: 31, resource: { buffer: bufferLabourForce } },
       ],
     });
 
-    await runGPU();
+    // await runGPU();
 
     const errorScope = await device.popErrorScope();
     if (errorScope) {
@@ -286,8 +288,8 @@
         for (const colname of columnsThatNeedCleaning) {
           const input = join[colname];
           let nans = 0;
-          for (let i = offset; i < count; i++) {
-            if (Number.isNaN(input[i])) nans += 1;
+          for (let i = 0; i < count; i++) {
+            if (Number.isNaN(input[offset + i])) nans += 1;
           }
           if (nans >= (count - nans)) return false;
         }
@@ -347,12 +349,23 @@
         join.initialTech[i] = INITIAL_TECH;
       }
 
-      const offsets = new Uint32Array(
-        Array.from(joinGroup.groups.values(), row => (
-          row.offset
-        )),
-      );
-      return [size, joinGroup, join, offsets];
+      const initCapital = Array.from(joinGroup.groups.keys(), country => {
+        return csv.findIndex(pwtStock, [
+          ['year', year => year === 1999],
+          ['countryIso', iso => iso === country],
+        ]);
+      });
+
+      const offsets = Array.from(joinGroup.groups.values(), row => (
+        row.offset
+      ));
+
+      const initalValues = {
+        capital: new Float32Array(initCapital),
+        offsets: new Uint32Array(offsets),
+        size: offsets.length,
+      };
+      return [size, joinGroup, join, initalValues];
     }
   </script>
   <script type="text/wgsl" id="compute-shader">
@@ -372,19 +385,26 @@
       tech_init: f32,
     };
 
+    struct ComputedState {
+      technology: f32,
+      capital: f32,
+      capital_steady_state: f32,
+      output: f32,
+    }
+
     @group(1) @binding(0) var<uniform> exo: ExogenousState;
     @group(1) @binding(1) var<uniform> effects: Effects;
     @group(1) @binding(2) var<uniform> config: Config;
 
     @group(0) @binding(0) var<storage, read> offsets: array<u32>;
-    @group(0) @binding(1) var<storage, read_write> technology: array<f32>;
-    @group(0) @binding(2) var<storage, read_write> output: array<f32>;
-    @group(0) @binding(3) var<storage, read_write> capital: array<f32>;
+    @group(0) @binding(1) var<storage, read> capital_init: array<f32>;
 
-    @group(0) @binding(4) var<storage, read> growth_phoneuse: array<f32>;
-    @group(0) @binding(5) var<storage, read> growth_netuse: array<f32>;
-    @group(0) @binding(6) var<storage, read> unemployment: array<f32>;
-    @group(0) @binding(7) var<storage, read> labourForce: array<f32>;
+    @group(0) @binding(10) var<storage, read_write> out: array<ComputedState>;
+
+    @group(0) @binding(20) var<storage, read> growth_phoneuse: array<f32>;
+    @group(0) @binding(21) var<storage, read> growth_netuse: array<f32>;
+    @group(0) @binding(30) var<storage, read> unemployment: array<f32>;
+    @group(0) @binding(31) var<storage, read> labourForce: array<f32>;
 
     /**
      * Computes technology over the different periods
@@ -392,9 +412,9 @@
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let offset = offsets[global_id.x];
+      var k_last = capital_init[global_id.x];
       var t_last = exo.tech_init;
-      var k_last = capital[offset];
-      var y_last = output[offset];
+      var y_last = 1.0;
 
       for (var i = 0u; i < config.yearsPerCountry; i++) {
         let idx = offset + i;
@@ -403,28 +423,28 @@
         let t_growth_net = growth_netuse[idx] * effects.net_exp;
         let t_next = t_growth_phone + t_growth_net + t_last;
         let l_next = labourForce[idx] * (1 - unemployment[idx]);
-        let k_next = exo.saving * y_last - exo.depreciation * k_last;
+        let k_next = (exo.saving * y_last) - (exo.depreciation * k_last);
         let y_next = t_next * pow(l_next, exo.alpha) * pow(k_next, 1 - exo.alpha);
 
         y_last = y_next;
         k_last = k_next;
         t_last = t_next;
-        output[idx] = y_next;
-        capital[idx] = k_next;
-        technology[idx] = t_next;
+
+        out[idx].output = y_next;
+        out[idx].capital = k_next;
+        out[idx].technology = t_next;
       }
     }
 
 
-    @group(0) @binding(0) var<storage, read_write> capitalSteadyState: array<f32>;
-    @group(0) @binding(1) var<storage, read> technologyInput: array<f32>;
+    @group(0) @binding(20) var<storage, read> technologyInput: array<f32>;
 
     @compute @workgroup_size(64)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
-      let a = exo.alpha * technologyInput[idx];
+      let a = exo.alpha * out[idx].technology;
       let l = labourForce[idx] * (1 - unemployment[idx]);
-      capitalSteadyState[idx] = exo.alpha * technologyInput[idx];
+      out[idx].capital_steady_state = a * l;
     }
   </script>
 </body>

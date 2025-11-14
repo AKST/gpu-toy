@@ -15,32 +15,39 @@ export function createStep({
   workGroups,
   uniforms,
 }) {
-  const pipeline = device.createComputePipeline({
-    layout: 'auto',
-    compute: {
-      module: shaderModule,
-      entryPoint,
-    },
-  });
+  let pipeline, bindGroup, bindGroupUniform, loadIntoPass;
 
-  const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries,
-  });
+  try {
+    pipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: {
+        module: shaderModule,
+        entryPoint,
+      },
+    });
 
-  const bindGroupUniform = uniforms && device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(1),
-    entries: uniforms,
-  });
+    bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries,
+    });
 
-  const loadIntoPass = pass => {
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(0, bindGroup);
-    if (bindGroupUniform) {
-      pass.setBindGroup(1, bindGroupUniform);
-    }
-    pass.dispatchWorkgroups(workGroups);
-  };
+    bindGroupUniform = uniforms && device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(1),
+      entries: uniforms,
+    });
+
+    loadIntoPass = pass => {
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bindGroup);
+      if (bindGroupUniform) {
+        pass.setBindGroup(1, bindGroupUniform);
+      }
+      pass.dispatchWorkgroups(workGroups);
+    };
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
 
   return { loadIntoPass, pipeline, bindGroup, bindGroupUniform };
 }
