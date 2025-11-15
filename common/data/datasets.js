@@ -46,7 +46,8 @@ const generateYears = (a, b) =>
   Array.from({ length: b - a }, (_, i) => ({ name: `${a+i}`, type: 'number' }))
 
 const wbYears = generateYears(1960, 2025);
-const pwtYears = generateYears(1950, 2024);
+const pwtKpppYears = generateYears(1950, 2024);
+const pwtCtfpYears = generateYears(1954, 2024);
 
 const wbColumns = [
   { name: 'Country Name', type: 'string', drop: true },
@@ -98,6 +99,7 @@ export const wbUnemployment = {
 };
 
 export const pwtCapitalStock = {
+  source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
   url: '../files/2025-11-12T08-48_export.csv',
   headers: {
     load: [
@@ -105,11 +107,29 @@ export const pwtCapitalStock = {
       { drop: true, type: 'string', name: 'Country' },
       { drop: true, type: 'string', name: 'Variable code' },
       { drop: true, type: 'string', name: 'Variable name' },
-      ...pwtYears,
+      ...pwtKpppYears,
     ],
     long: {
       retain: ['countryIso'],
       colout: { val: 'capitalPPP', key: 'year' },
+    },
+  },
+};
+
+export const pwtTfpStock = {
+  source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
+  url: '../files/2025-11-15T05-12_export.csv',
+  headers: {
+    load: [
+      { type: 'string', name: 'ISO code', rename: 'countryIso' },
+      { drop: true, type: 'string', name: 'Country' },
+      { drop: true, type: 'string', name: 'Variable code' },
+      { drop: true, type: 'string', name: 'Variable name' },
+      ...pwtCtfpYears,
+    ],
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'ctfp', key: 'year' },
     },
   },
 };

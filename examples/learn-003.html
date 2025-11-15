@@ -15,6 +15,8 @@
       max-width: 550px;
     }
     * { box-sizing: border-box; color: white }
+    ul { font-size: 12px; line-height: 1.5; }
+    li + li { margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -98,6 +100,59 @@
       (almost certianly incorrect), and this might be to explain for
       the dramatically incorrect results for capital and output.
     </p>
+    <hr>
+    <h2>Data Source</h2>
+    <ul>
+      <li>
+        <b>phoneInternet, phoneUsage</b>:
+        <ul>
+          <li><b>Source</b>: <a href="https://datahub.itu.int/dashboards/">ITU data base</a></li>
+        </ul>
+      </li>
+      <li>
+        <b>capitalPPP, ctfp</b>:
+        <ul>
+          <li><b>Source</b>: <a href="https://pwt-data-tool.streamlit.app">Penn World Trade Table</a></li>
+          <li><b>Usage</b>: the value for captial in 1999 was used for initial capial at the start of 2000</li>
+        </ul>
+      </li>
+      <li>
+        <b>labourForce, population, unemployment</b>:
+        <ul>
+          <li><b>Source</b>: World Bank</li>
+        </ul>
+      </li>
+      <li>
+        <b>employed</b>:
+        <ul>
+          <li><b>Computed</b>: From LF*(1-(unemployment/100))</li>
+        </ul>
+      </li>
+      <li>
+        <b>computed_{output,capital,capitalSteadyState,technology}</b>:
+        <ul>
+          <li><b>About</b>: this is the output from the model</li>
+        </ul>
+      </li>
+      <li>
+        Field <b>faked_askAngusWhatThatMeans</b>:
+        <ul>
+          <li>
+            <b>About</b>: So basically this fields demarks where
+            I just filled in missing data entries by repeating the
+            previous period. If the first period was missing I
+            just used 0. This is obviously unideal, but I mean what
+            can you do.
+          </li>
+        </ul>
+      </li>
+      <li>
+        Field <b>difference_in_{phoneInternet,phoneUsage}</b>:
+        <ul>
+          <li><b>About</b>: these are computed deltas in usage of phone and internet</li>
+        </ul>
+      </li>
+    </ul>
   </template>
   <script>
     window.addEventListener('error', event => console.error(event.error));
@@ -270,17 +325,17 @@
         await mapping.read();
 
         for (let i = 0; i < size; i++) {
-          df.technology[i] = combinedOutputData[i * 5 + 0];
-          df.capital[i] = combinedOutputData[i * 5 + 1];
-          df.capitalSteadyState[i] = combinedOutputData[i * 5 + 2];
-          df.output[i] = combinedOutputData[i * 5 + 3];
+          df.computed_technology[i] = combinedOutputData[i * 5 + 0];
+          df.computed_capital[i] = combinedOutputData[i * 5 + 1];
+          df.computed_capitalSteadyState[i] = combinedOutputData[i * 5 + 2];
+          df.computed_output[i] = combinedOutputData[i * 5 + 3];
           df.employed[i] = combinedOutputData[i * 5 + 4]
         }
 
-        showLog('Output results:', [...df.output.slice(0, 10)]);
-        showLog('Captial results:', [...df.capital.slice(0, 10)]);
+        showLog('Output results:', [...df.computed_output.slice(0, 10)]);
+        showLog('Captial results:', [...df.computed_capital.slice(0, 10)]);
         showLog('Employed results:', [...df.employed.slice(0, 10)]);
-        showLog('Technology results:', [...df.technology.slice(0, 10)]);
+        showLog('Technology results:', [...df.computed_technology.slice(0, 10)]);
         showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
       } catch (e) {
@@ -327,10 +382,10 @@
             csv.renameColumn(
               csv.dropColumn(df, [
                 'countryId',
-                'technology',
-                'capitalSteadyState',
-                'capital',
-                'output',
+                'computed_technology',
+                'computed_capitalSteadyState',
+                'computed_capital',
+                'computed_output',
               ]),
               {
                 generatedData: 'faked_askAngusWhatThatMeans',
@@ -411,6 +466,7 @@
         wbLabourForce,
         wbUnemployment,
         pwtStock,
+        pwtTfpStock,
       ] = await Promise.all([
         fetching.loadItuData(datasets.ituCellPhones),
         fetching.loadItuData(datasets.ituMobileBoardBandSubcriptions),
@@ -418,10 +474,11 @@
         fetching.loadWideData(datasets.wbLabourForce),
         fetching.loadWideData(datasets.wbUnemployment),
         fetching.loadWideData(datasets.pwtCapitalStock),
+        fetching.loadWideData(datasets.pwtTfpStock),
       ]);
 
       let join = csv.outerJoins(
-        [ituPhone, ituMobileInternet, wbPop, wbLabourForce, wbUnemployment, pwtStock],
+        [ituPhone, ituMobileInternet, wbPop, wbLabourForce, wbUnemployment, pwtStock, pwtTfpStock],
         ['countryIso', 'year'],
       );
       join = csv.filter(join, 'year', year => !Number.isNaN(year) && year > 1999);
@@ -448,11 +505,11 @@
       join = joinGroup.frame;
 
       const size = csv.getSize(join);
-      join.technology = new Float32Array(size);
-      join.capitalSteadyState = new Float32Array(size);
       join.employed = new Float32Array(size);
-      join.capital = new Float32Array(size);
-      join.output = new Float32Array(size);
+      join.computed_technology = new Float32Array(size);
+      join.computed_capitalSteadyState = new Float32Array(size);
+      join.computed_capital = new Float32Array(size);
+      join.computed_output = new Float32Array(size);
 
       join.phoneUsageD = new Float32Array(size);
       join.phoneInternetD = new Float32Array(size);
@@ -535,6 +592,11 @@
       capital_steady_state: f32,
       output: f32,
       employed: f32,
+    }
+
+    struct CountryConfig {
+      idx_offset: u32,
+      init_capital: f32,
     }
 
     @group(1) @binding(0) var<uniform> exo: ExogenousState;

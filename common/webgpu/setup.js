@@ -7,6 +7,41 @@ export function createBuffer(device, data, flag) {
   return buffer;
 }
 
+export function initStructArrayBuffer(device, arrays, flag) {
+  const length = arrays[0].length
+  let size = arrays[0].constructor.BYTES_PER_ELEMENT;
+
+  for (let i = 1; i < arrays.length; i++) {
+    if (length !== arrays[i].length) throw new Error();
+    size += arrays[i].constructor.BYTES_PER_ELEMENT
+    if (arrays[i] instanceof Float32Array) continue;
+    if (arrays[i] instanceof Uint32Array) continue;
+  }
+
+  const arrayBuffer = new ArrayBuffer(size * length);
+  const df32 = new Float32Array(arrayBuffer);
+  const du32 = new Uint32Array(arrayBuffer);
+
+  for (let i = 0; i < length; i++) {
+    for (let j = 0; j < arrays.length; j++) {
+      const array = arrays[j];
+      const idx = i * (size / 4) + j;
+      if (array instanceof Uint32Array) {
+        du32[idx] = array[i];
+      } else {
+        df32[idx] = array[i];
+      }
+    }
+  }
+
+  const buffer = device.createBuffer({
+    size: size * length,
+    usage: GPUBufferUsage.STORAGE | flag,
+  });
+  device.queue.writeBuffer(buffer, 0, arrayBuffer);
+  return buffer;
+}
+
 export function createStep({
   device,
   shaderModule,
