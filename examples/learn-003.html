@@ -491,29 +491,32 @@
       if (k_last < 0 || k_last != k_last) { k_init = 1.0; }
       if (tech <= 0 || labour <= 0) { return k_init; }
 
-      var k = max(k_init, 1.0);
-      let base_term = k_last * (1.0 - exo.depreciation);
-      let coeff = exo.saving * tech * pow(labour, exo.alpha);
+      let scale = max(k_init, 1.0);
+      let base_term = 1.0 - exo.depreciation;
+      let coeff = exo.saving * tech * pow(labour, exo.alpha) * pow(scale, -exo.alpha);
+      var k_scaled = 1.0;
+      let damping = 0.5;
 
       for (var i = 0u; i < config.ralph_newton_iterations; i++) {
-        let k_pow_beta = pow(k, 1.0 - exo.alpha);
-        let k_pow_neg_alpha = pow(k, -exo.alpha);
-        let f = k - coeff * k_pow_beta - base_term;
+        let k_pow_beta = pow(k_scaled, 1.0 - exo.alpha);
+        let k_pow_neg_alpha = pow(k_scaled, -exo.alpha);
+        let f = k_scaled - coeff * k_pow_beta - base_term;
         let f_prime = 1.0 - coeff * (1.0 - exo.alpha) * k_pow_neg_alpha;
 
         if (abs(f_prime) < 1e-8) { break; }
 
-        let k_new = k - f / f_prime;
+        let step = f / f_prime;
+        let k_new = k_scaled - damping * step;
         let k_safe = max(k_new, 0.1);
 
-        if (abs(k_safe - k) < 1e-6 * abs(k)) {
-          return k_safe;
-        } else {
-          k = k_safe;
+        if (abs(k_safe - k_scaled) < 1e-6 * abs(k_scaled)) {
+          return k_safe * scale;
         }
+
+        k_scaled = k_safe;
       }
 
-      return k;
+      return k_scaled * scale;
     }
 
     /**
