@@ -1,8 +1,12 @@
 import { el, createStyleSheetLink } from './common/dom-kit.js';
 
 function createKnob(name, labelText, value) {
+  const valueFmt = value.toLocaleString('fullwide', {
+      useGrouping: false,
+      maximumFractionDigits: 20
+  });
   const label = el('label', { htmlFor: name }, [labelText]);
-  const input = el('input', { id: name, name, value });
+  const input = el('input', { id: name, name, value: valueFmt });
   return [label, input];
 }
 

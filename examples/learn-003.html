@@ -247,8 +247,8 @@
       document.body.firstChild,
     );
 
-    const INIT_COEFF_PHONE = 0.0001;
-    const INIT_COEFF_INTERNET = 0.0001;
+    const INIT_COEFF_PHONE = 0.00000001;
+    const INIT_COEFF_INTERNET = 0.00000001;
 
     window.addEventListener('message', onMessage);
     window.parent?.postMessage({
@@ -546,7 +546,14 @@
         'avgDepreciation',
         'laboursShare',
       ];
+      const badData = [
+        'ARM', 'BDI', 'CIV',
+        'GIN', 'LBN', 'SDN',
+        'SRB', 'ZWE', 'QAT',
+        'SAU', 'VEN',
+      ];
       const columnsThatNeedRepeating = ['countryId', 'countryIso', 'countryName'];
+
 
       const [
         ituPhone,
@@ -574,25 +581,6 @@
 
       // insert any safe values if there's risk of data being dropped.
       const countryIsos = [...(new Set(wbPop.countryIso.concat(pwtStock.countryIso)))].sort();
-      for (const [col, ds, df] of [
-        ['grossSavingsPct', datasets.wbSavingsRateOfGDP, wbSavings],
-        ['avgDepreciation', datasets.pwtAvgDepreciation, pwtAvgDepreciation],
-        ['laboursShare', datasets.pwtLabourShare, pwtLabourShare],
-      ]) {
-        for (const country of countryIsos) {
-
-          const index = csv.findIndex(df, [
-            ['year', year => year === 2000],
-            ['countryIso', iso => iso === country],
-          ]);
-          if (index == null) continue;
-          const value = df[col][index];
-          const weird = (value == null || Number.isNaN(value) || value == 0);
-          if (weird) {
-            df[col][index] = ds.avg2000;
-          }
-        }
-      }
 
       let join = csv.outerJoins(
         [
@@ -603,11 +591,35 @@
         ['countryIso', 'year'],
       );
       join = csv.filter(join, 'year', year => !Number.isNaN(year) && year > 1999);
-      console.log('a', csv.getSize(join));
       let joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
-      console.log('b', csv.getSize(joinGroup.frame));
+      join = joinGroup.frame;
+
+      for (const [col, ds] of [
+        ['grossSavingsPct', datasets.wbSavingsRateOfGDP],
+        ['avgDepreciation', datasets.pwtAvgDepreciation],
+        ['laboursShare', datasets.pwtLabourShare],
+      ]) {
+        for (const country of countryIsos) {
+          const index = csv.findIndex(join, [
+            ['year', year => year === 2000],
+            ['countryIso', iso => iso === country],
+          ]);
+
+          if (index == null) {
+            console.log(country, col);
+            continue;
+          }
+          const value = join[col][index];
+          const weird = (value == null || Number.isNaN(value) || value == 0);
+          if (weird) {
+            join[col][index] = ds.avg2000;
+          }
+        }
+      }
+
       joinGroup = csv.filterGroups(joinGroup, { uniformSize: true }, meta => {
         if (meta.max < 2012 || meta.count < 10) return false;
+
 
         const join = joinGroup.frame;
         const { count, offset } = meta;
@@ -640,6 +652,7 @@
       join.phoneUsageD = new Float32Array(size);
       join.phoneInternetD = new Float32Array(size);
       join.generatedData = new Array(size).fill('');
+
 
       /**
        * Clean up the data may not be complete
@@ -692,8 +705,10 @@
         ]);
         const value = pwtTfpStock.ctfp[index];
         const weird = (value == null || Number.isNaN(value) || value == 0);
-        return weird ? datasets.pwtTfpStock.avg1999 : value;
+        return weird ? (datasets.pwtTfpStock.avg1999 / 2) : value;
       });
+
+      for (let i = 0; i < size; i++) join.grossSavingsPct[i] = join.grossSavingsPct[i] / 100;
 
       const offsets = Array.from(joinGroup.groups.values(), row => row.offset);
 
