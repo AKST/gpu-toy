@@ -6,6 +6,26 @@ function createKnob(name, labelText, value) {
   return [label, input];
 }
 
+function * createConfigRowItems(configRows) {
+  for (const config of configRows) {
+    switch (config.kind) {
+      case 'number': {
+        const { name, label: labelText, init } = config;
+        const [label, input] = createKnob(name, labelText, init);
+        yield * [label, input];
+        break;
+      }
+      case 'title': {
+        yield el('label', { style: 'font-weight: bold' }, [config.title]);
+        break;
+      }
+      default:
+        console.warn('unknown config row item', config);
+        break;
+    }
+  }
+}
+
 export class ConfigSideBarElement extends HTMLElement {
   #root = this.attachShadow({ mode: "open" });
 
@@ -19,7 +39,7 @@ export class ConfigSideBarElement extends HTMLElement {
       el('fieldset', {}, [
         el('legend', {}, ['Knobs']),
         this.fields = el('div', { class: 'fields' }),
-        el('input', { type: 'submit', value: 'Submit' }),
+        el('input', { type: 'submit', value: 'Apply Update' }),
       ]),
     ]);
 
@@ -35,13 +55,9 @@ export class ConfigSideBarElement extends HTMLElement {
     });
   }
 
-  setKnobs(knobs) {
+  setKnobs(rows) {
     this.#setFieldsetDisplay('block');
-    for (const { name, label: labelText, init } of knobs) {
-      const [label, input] = createKnob(name, labelText, init);
-      this.fields.appendChild(label);
-      this.fields.appendChild(input);
-    }
+    this.fields.replaceChildren(...createConfigRowItems(rows));
   }
 
   flush() {

@@ -7,6 +7,15 @@
   <meta name="description" content="Compute a TFP growth model based on phone adoption via WebGPU">
   <link rel="stylesheet" href="../common/frame-style.css">
   <title>Web GPU - Line Graph</title>
+  <style>
+    .container { display: none; }
+    body {
+      padding: 16px;
+      margin: 0 auto;
+      max-width: 550px;
+    }
+    * { box-sizing: border-box; color: white }
+  </style>
 </head>
 <body>
   <script>
@@ -21,6 +30,15 @@
     import { initWebGPU } from '../common/webgpu/init.js';
     import { createBuffer, createStep, createMapping } from '../common/webgpu/setup.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
+
+    const wait = t => (new Promise(r => setTimeout(() => r(), t)))
+    await wait(0);
+
+    document.body.insertBefore(
+      document.getElementById('model-syntax').content.cloneNode(true),
+      document.body.firstChild,
+    );
+
 
     const INITIAL_TECH = 1_000;
 
@@ -40,12 +58,14 @@
     window.parent?.postMessage({
       kind: 'register-knobs',
       knobs: [
-        { name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
-        { name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
-        { name: 'technology', label: '(A₀) (TFP Init)', init: 1000 },
-        { name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
-        { name: 'phoneEffect', label: '𝛽 Phone Effect', init: 0.001 },
-        { name: 'phoneInternet', label: '𝛽 Internet Effect', init: 0.001 },
+        { kind: 'title', title: 'Exogenous Variables' },
+        { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
+        { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
+        { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
+        { kind: 'number', name: 'technology', label: '(A₀) (TFP Init)', init: 1000 },
+        { kind: 'title', title: 'Fixed Effects' },
+        { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: 0.001 },
+        { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: 0.001 },
       ],
     });
 
@@ -255,7 +275,7 @@
                 phoneInternetD: 'difference_in_phoneInternet',
               },
             ),
-            'model-inputs.csv',
+            'all-model-data-points.csv',
           );
 
         default:
@@ -466,14 +486,14 @@
      * we get a function that produces zero or a sufficently small
      * number that we are're satisified.
      */
-    fn ralph_newton_capital(k_last: f32, t: f32, l: f32) -> f32 {
+    fn ralph_newton_capital(k_last: f32, tech: f32, labour: f32) -> f32 {
       var k_init = k_last;
       if (k_last < 0 || k_last != k_last) { k_init = 1.0; }
-      if (t <= 0 || l <= 0) { return k_init; }
+      if (tech <= 0 || labour <= 0) { return k_init; }
 
       var k = max(k_init, 1.0);
       let base_term = k_last * (1.0 - exo.depreciation);
-      let coeff = exo.saving * t * pow(l, exo.alpha);
+      let coeff = exo.saving * tech * pow(labour, exo.alpha);
 
       for (var i = 0u; i < config.ralph_newton_iterations; i++) {
         let k_pow_beta = pow(k, 1.0 - exo.alpha);
@@ -497,33 +517,48 @@
     }
 
     /**
+     * Computes the steady state at `t` for
+     *
+     * K(t) = Labour * ((saving*technology)/depreciation)^(1/alpha)
+     */
+    fn capital_steady_state_at(t: u32) -> f32 {
+      let numer = exo.saving * out[t].technology;
+      let denom = exo.depreciation;
+      return out[t].employed * pow(numer/denom, 1.0/exo.alpha);
+    }
+
+    /**
+     * Compute Output, Capital, Technology, Labour at period t.
+     */
+    fn compute_yktl_at(t: u32, last_tech: f32, last_kaptial: f32) -> vec4<f32> {
+      let a_growth_phone = growth_phoneuse[t] * effects.phone_fixed;
+      let a_growth_net = growth_netuse[t] * effects.net_exp;
+      let a = a_growth_phone + a_growth_net + last_tech;
+      let l = labourForce[t] * (100.0 - unemployment[t]) * (1.0/100.0);
+      let k = ralph_newton_capital(last_kaptial, a, l);
+      let y = a * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
+      return vec4(y, k, a, l);
+    }
+
+    /**
      * Computes technology over the different periods
      */
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (global_id.x >= config.countries) { return; }
       let offset: u32 = offsets[global_id.x];
-      var k_last: f32 = capital_init[global_id.x];
-      var t_last: f32 = exo.tech_init;
+      var last_k: f32 = capital_init[global_id.x];
+      var last_t: f32 = exo.tech_init;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
-
-        let t_growth_phone = growth_phoneuse[idx] * effects.phone_fixed;
-        let t_growth_net = growth_netuse[idx] * effects.net_exp;
-        let t = t_growth_phone + t_growth_net + t_last;
-        let l = labourForce[idx] * (100.0 - unemployment[idx]) * (1.0/100.0);
-
-        let k = ralph_newton_capital(k_last, t, l);
-        let y = t * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
-
-        k_last = k;
-        t_last = t;
-
-        out[idx].output = y;
-        out[idx].capital = k;
-        out[idx].employed = l;
-        out[idx].technology = t;
+        let yktl = compute_yktl_at(idx, last_t, last_k);
+        last_k = yktl.y;
+        last_t = yktl.z;
+        out[idx].output = yktl.x;
+        out[idx].capital = yktl.y;
+        out[idx].technology = yktl.z;
+        out[idx].employed = yktl.w;
       }
     }
 
@@ -532,11 +567,89 @@
       let idx = global_id.x;
       if (idx >= config.observations) { return; }
 
-      let numer = exo.saving * out[idx].technology;
-      let denom = exo.depreciation;
-      let expon = 1.0/exo.alpha;
-      out[idx].capital_steady_state = out[idx].employed * pow(numer/denom, expon);
+      out[idx].capital_steady_state = capital_steady_state_at(idx);
     }
   </script>
+  <template id="model-syntax">
+    <h1>TFP growth via Phones & Internet</h1>
+    <math display="block">
+      <mover>
+        <mtable>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <msub>
+                <mi>A</mi>
+                <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+              </msub>
+              <mo>+</mo>
+              <mrow>
+                <mi>𝛽</mi>
+                <mo>·</mo>
+                <msub><mi>𝜑</mi><mi>t</mi></msub>
+              </mrow>
+              <mo>+</mo>
+              <mrow>
+                <mi>𝛾</mi>
+                <mo>·</mo>
+                <msub><mi>𝜓</mi><mi>t</mi></msub>
+              </mrow>
+            </mtd>
+          </mtr>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <mrow>
+                <msub>
+                  <mi>K</mi>
+                  <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+                </msub>
+                <mo>·</mo>
+                <mrow>
+                  <mo>(</mo>
+                  <mrow><mn>1</mn><mo>-</mo><mi>𝛿</mi></mrow>
+                  <mo>)</mo>
+                </mrow>
+              </mrow>
+              <mo>+</mo>
+              <mrow>
+                <mi>s</mi>
+                <mo>·</mo>
+                <msub><mi>Y</mi><mi>t</mi></msub>
+              </mrow>
+            </mtd>
+          </mtr>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <msub><mi>A</mi><mi>t</mi></msub>
+              <mo>·</mo>
+              <msubsup>
+                <mi>L</mi>
+                <mi>t</mi>
+                <mi>𝛼</mi>
+              </msubsup>
+              <mo>·</mo>
+              <msubsup>
+                <mi>K</mi>
+                <mi>t</mi>
+                <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
+              </msubsup>
+            </mtd>
+          </mtr>
+        </mtable>
+        <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
+      </mover>
+    </math>
+    <h2>About</h2>
+    <p>
+      This model assumes all countries have TFP of 1000 at the start
+      (almost certianly incorrect), and this might be to explain for
+      the dramatically incorrect results for capital and output.
+    </p>
+  </template>
 </body>
 </html>

@@ -14,6 +14,15 @@ export function loadApp({ searchParams }) {
   iframe.src = `./examples/${app}.html`;
 }
 
+const mainResizeObserver = new ResizeObserver(entries => {
+  for (const { target, contentRect } of entries) {
+    const iframe = target.querySelector('iframe');
+    const { width, height } = contentRect;
+    iframe.width = width;
+    iframe.height = height;
+  }
+});
+
 function getChrome() {
   const attr = document.querySelector('#attribution');
   const config = document.querySelector('#config');
@@ -63,3 +72,4 @@ globalThis.addEventListener('message', event => {
 });
 
 loadApp(new URL(globalThis.location+''));
+mainResizeObserver.observe(document.querySelector('main'));
