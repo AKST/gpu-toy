@@ -107,7 +107,7 @@ export const wbSavingsRateOfGDP = {
     load: wbColumns,
     long: {
       retain: ['countryIso'],
-      colout: { val: 'gross_savings_pct', key: 'year' },
+      colout: { val: 'grossSavingsPct', key: 'year' },
     },
   },
 };
@@ -182,7 +182,7 @@ export const pwtLabourShare = {
     ],
     long: {
       retain: ['countryIso'],
-      colout: { val: 'labours_share', key: 'year' },
+      colout: { val: 'laboursShare', key: 'year' },
     },
   },
 };

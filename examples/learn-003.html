@@ -541,6 +541,11 @@
         'capitalPPP', 'labourForce', 'phoneInternet',
         'phoneUsage', 'population', 'unemployment', 'ctfp',
       ];
+      const columnsWeCanFake = [
+        'grossSavingsPct',
+        'avgDepreciation',
+        'laboursShare',
+      ];
       const columnsThatNeedRepeating = ['countryId', 'countryIso', 'countryName'];
 
       const [
@@ -570,11 +575,12 @@
       // insert any safe values if there's risk of data being dropped.
       const countryIsos = [...(new Set(wbPop.countryIso.concat(pwtStock.countryIso)))].sort();
       for (const [col, ds, df] of [
-        ['gross_savings_pct', datasets.wbSavingsRateOfGDP, wbSavings],
+        ['grossSavingsPct', datasets.wbSavingsRateOfGDP, wbSavings],
         ['avgDepreciation', datasets.pwtAvgDepreciation, pwtAvgDepreciation],
-        ['labours_share', datasets.pwtLabourShare, pwtLabourShare],
+        ['laboursShare', datasets.pwtLabourShare, pwtLabourShare],
       ]) {
         for (const country of countryIsos) {
+
           const index = csv.findIndex(df, [
             ['year', year => year === 2000],
             ['countryIso', iso => iso === country],
@@ -597,12 +603,15 @@
         ['countryIso', 'year'],
       );
       join = csv.filter(join, 'year', year => !Number.isNaN(year) && year > 1999);
+      console.log('a', csv.getSize(join));
       let joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', join);
+      console.log('b', csv.getSize(joinGroup.frame));
       joinGroup = csv.filterGroups(joinGroup, { uniformSize: true }, meta => {
         if (meta.max < 2012 || meta.count < 10) return false;
 
         const join = joinGroup.frame;
         const { count, offset } = meta;
+
         for (const colname of columnsThatNeedCleaning) {
           if (colname === 'ctfp') continue;
           const input = join[colname];
@@ -615,6 +624,7 @@
 
         return true;
       });
+      console.log('c', csv.getSize(joinGroup.frame));
 
 
       joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', joinGroup.frame);
@@ -634,7 +644,10 @@
       /**
        * Clean up the data may not be complete
        */
-      for (const colname of columnsThatNeedCleaning) {
+      for (const colname of [
+        ...columnsThatNeedCleaning,
+        ...columnsWeCanFake,
+      ]) {
         const input = join[colname];
         for (const [groupValue, { offset, count }] of joinGroup.groups.entries()) {
           if (Number.isNaN(input[offset])) {
@@ -672,7 +685,6 @@
         return pwtStock.capitalPPP[index];
       });
 
-      const avgFtfpOf1999 = 0.636244538850831;
       const initTFP = Array.from(joinGroup.groups.keys(), country => {
         const index = csv.findIndex(pwtTfpStock, [
           ['year', year => year === 1999],
