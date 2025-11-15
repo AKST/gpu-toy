@@ -113,7 +113,13 @@
         <b>capitalPPP, ctfp</b>:
         <ul>
           <li><b>Source</b>: <a href="https://pwt-data-tool.streamlit.app">Penn World Trade Table</a></li>
-          <li><b>Usage</b>: the value for captial in 1999 was used for initial capial at the start of 2000</li>
+          <li>
+            <b>Usage</b>: the value for captial in 1999 was used for initial capial at the start of 2000.
+            And I did something simlar for TFP, when there was no value I used
+            the average TFP from 1999 instead, which is almost certainly higher
+            than it probably should be for those countries without it.
+            (the average CTFP from 1999 is <b>0.636244538850831</b> btw)
+          </li>
         </ul>
       </li>
       <li>
@@ -172,8 +178,8 @@
       document.body.firstChild,
     );
 
-
-    const INITIAL_TECH = 1_000;
+    const INIT_COEFF_PHONE = 0.0001;
+    const INIT_COEFF_INTERNET = 0.0001;
 
     window.addEventListener('message', onMessage);
     window.parent?.postMessage({
@@ -195,10 +201,9 @@
         { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
         { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
         { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
-        { kind: 'number', name: 'technology', label: '(A₀) (TFP Init)', init: 1000 },
         { kind: 'title', title: 'Fixed Effects' },
-        { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: 0.001 },
-        { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: 0.001 },
+        { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
+        { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
       ],
     });
 
@@ -219,18 +224,21 @@
       { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
       { type: 'f32', size: 4, init: 0.4, name: 'saving' },
       { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
-      { type: 'f32', size: 4, init: INITIAL_TECH, name: 'tech_init' },
     ]);
 
     const uniformEff = UniformAdapter.create([
-      { type: 'f32', size: 4, init: 0.001, name: 'phoneEffect' },
-      { type: 'f32', size: 4, init: 0.001, name: 'phoneInternet' },
+      { type: 'f32', size: 4, init: INIT_COEFF_PHONE, name: 'phoneEffect' },
+      { type: 'f32', size: 4, init: INIT_COEFF_INTERNET, name: 'phoneInternet' },
     ]);
 
     device.pushErrorScope('validation');
 
     const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-    const bufferCountryConfig = initStructArrayBuffer(device, [inits.offsets, inits.capital], COPY_DST);
+    const bufferCountryConfig = initStructArrayBuffer(device, [
+      inits.offsets,
+      inits.capital,
+      inits.technology,
+    ], COPY_DST);
 
     // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
     const combinedOutputData = new Float32Array(new Array(size * 5).fill(0));
@@ -286,8 +294,6 @@
       entryPoint: 'step2',
       entries: [
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
-        { binding: 30, resource: { buffer: bufferUnemployment } },
-        { binding: 31, resource: { buffer: bufferLabourForce } },
       ],
     });
 
@@ -364,7 +370,6 @@
       uniformExo.update('alpha', data.alpha);
       uniformExo.update('saving', data.saving);
       uniformExo.update('depreciation', data.depreciation);
-      uniformExo.update('tech_init', data.technology);
       uniformEff.update('phoneEffect', data.phoneEffect);
       uniformEff.update('phoneInternet', data.phoneInternet);
       uniformExo.updateBuffer(device, bufferUnifExo);
@@ -453,7 +458,7 @@
 
       const columnsThatNeedCleaning = [
         'capitalPPP', 'labourForce', 'phoneInternet',
-        'phoneUsage', 'population', 'unemployment',
+        'phoneUsage', 'population', 'unemployment', 'ctfp',
       ];
       const columnsThatNeedRepeating = ['countryId', 'countryIso', 'countryName'];
 
@@ -487,6 +492,7 @@
         const join = joinGroup.frame;
         const { count, offset } = meta;
         for (const colname of columnsThatNeedCleaning) {
+          if (colname === 'ctfp') continue;
           const input = join[colname];
           let nans = 0;
           for (let i = 0; i < count; i++) {
@@ -554,10 +560,21 @@
         return pwtStock.capitalPPP[index];
       });
 
+      const avgFtfpOf1999 = 0.636244538850831;
+      const initTFP = Array.from(joinGroup.groups.keys(), country => {
+        const index = csv.findIndex(pwtTfpStock, [
+          ['year', year => year === 1999],
+          ['countryIso', iso => iso === country],
+        ]);
+        const value = pwtTfpStock.ctfp[index];
+        return Number.isNaN(value) ? avgFtfpOf1999 : value;
+      });
+
       const offsets = Array.from(joinGroup.groups.values(), row => row.offset);
 
       const initalValues = {
         capital: new Float32Array(initCapital),
+        technology: new Float32Array(initTFP),
         offsets: new Uint32Array(offsets),
         size: offsets.length,
       };
@@ -581,7 +598,6 @@
       alpha: f32,
       saving: f32,
       depreciation: f32,
-      tech_init: f32,
     };
 
     struct ComputedState {
@@ -595,6 +611,7 @@
     struct CountryConfig {
       idx_offset: u32,
       init_capital: f32,
+      init_technology: f32,
     }
 
     @group(1) @binding(0) var<uniform> exo: ExogenousState;
@@ -696,7 +713,7 @@
       if (global_id.x >= config.countries) { return; }
       let offset: u32 = country_config[global_id.x].idx_offset;
       var last_k: f32 = country_config[global_id.x].init_capital;
-      var last_t: f32 = exo.tech_init;
+      var last_t: f32 = country_config[global_id.x].init_technology;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
