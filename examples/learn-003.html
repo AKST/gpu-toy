@@ -169,6 +169,24 @@
           <td>Unemployment rate (%)</td>
           <td>Forward-filled missing values</td>
         </tr>
+        <tr>
+          <td>laboursShare</td>
+          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td>Labor's share of income (α)</td>
+          <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+        </tr>
+        <tr>
+          <td>grossSavingsPct</td>
+          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td>Gross savings as % of GDP</td>
+          <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+        </tr>
+        <tr>
+          <td>avgDepreciation</td>
+          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td>Average depreciation rate (δ)</td>
+          <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+        </tr>
       </tbody>
       <caption>
         <p>Input Variables</p>
@@ -273,7 +291,7 @@
     window.parent?.postMessage({
       kind: 'register-knobs',
       knobs: [
-        { kind: 'boolean', name: 'useFixedParams', label: 'Use Fixed Parameters', init: false },
+        { kind: 'boolean', name: 'useFixedParams', label: 'Exogenous (𝛼, s, d)', init: false },
         { kind: 'title', title: 'Exogenous Variables' },
         { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
         { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
@@ -878,7 +896,14 @@
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
-        let yktl = compute_yktl_at(primary[idx], aux[idx], last_t, last_k);
+        var yktl: vec4<f32>;
+
+        if (config.use_fixed_params == 1u) {
+          yktl = compute_yktl_at(exo, aux[idx], last_t, last_k);
+        } else {
+          yktl = compute_yktl_at(primary[idx], aux[idx], last_t, last_k);
+        }
+
         last_k = yktl.y;
         last_t = yktl.z;
         out[idx].output = yktl.x;

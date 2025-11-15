@@ -8,6 +8,8 @@
   grid-template-columns: 1fr;
 }
 
-input + label, input[type=submit] {
+input + label,
+input[type=submit],
+label:has(> input) + label:not(:has(> input)) {
   margin-top: 16px;
 }

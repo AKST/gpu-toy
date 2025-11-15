@@ -6,7 +6,7 @@ function createKnob(name, labelText, value) {
       maximumFractionDigits: 20
   });
   const label = el('label', { htmlFor: name }, [labelText]);
-  const input = el('input', { id: name, name, value: valueFmt });
+  const input = el('input', { id: name, name, value: valueFmt, 'data-type': 'number' });
   return [label, input];
 }
 
@@ -19,8 +19,23 @@ function * createConfigRowItems(configRows) {
         yield * [label, input];
         break;
       }
-      case 'button': {
-        // TODO
+      case 'boolean': {
+        const { name, label: labelText, init } = config;
+        yield el('label', {}, [labelText]);
+        yield el('label', {}, [el('input', {
+          type: 'radio',
+          name,
+          value: 'true',
+          checked: init === true,
+          'data-type': 'boolean'
+        }), 'Yes']);
+        yield el('label', {}, [el('input', {
+          type: 'radio',
+          name,
+          value: 'false',
+          checked: init === false,
+          'data-type': 'boolean'
+        }), 'No']);
         break;
       }
       case 'title': {
@@ -58,7 +73,15 @@ export class ConfigSideBarElement extends HTMLElement {
       event.preventDefault();
       const formData = new FormData(form);
       const detail = Object.fromEntries(formData.entries());
-      for (const k of Object.keys(detail)) detail[k] = parseFloat(detail[k]);
+      for (const k of Object.keys(detail)) {
+        const input = form.querySelector(`[name="${k}"]`);
+        const type = input?.dataset?.type;
+        if (type === 'boolean') {
+          detail[k] = detail[k] === 'true';
+        } else if (type === 'number') {
+          detail[k] = parseFloat(detail[k]);
+        }
+      }
       this.dispatchEvent(new CustomEvent('cfg-update', { detail, bubbles: true, composed: true }));
     });
   }
