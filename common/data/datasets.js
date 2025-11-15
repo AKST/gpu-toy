@@ -99,7 +99,7 @@ export const wbUnemployment = {
 };
 
 export const wbSavingsRateOfGDP = {
-  avg2000: 0.25,
+  avg2000: 25,
   source: 'https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS',
   url: '../files/API_NY.GNS.ICTR.ZS_DS2_en_csv_v2_156757.csv',
   dropRows: 4,
