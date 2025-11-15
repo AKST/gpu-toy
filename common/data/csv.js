@@ -15,6 +15,23 @@ export function getSize(frame) {
 }
 
 /**
+ * @param {Record<string, string[] | Float32Array>} arrays
+ */
+export function createDf(arrays) {
+  const firstKey = Object.keys(arrays)[0];
+  const size = arrays[firstKey]?.length ?? 0;
+
+  for (const key of Object.keys(arrays)) {
+    if (arrays[key].length !== size) throw new Error();
+  }
+
+  return {
+    ...arrays,
+    [SIZE_SYM]: size,
+  };
+}
+
+/**
  * Returns a record with series for each column.
  *
  * @param {string} text

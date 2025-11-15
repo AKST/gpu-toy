@@ -191,8 +191,15 @@
     window.parent?.postMessage({
       kind: 'register-button',
       label: 'Download All',
-      id: 'download-all',
+      id: 'download-out',
     });
+
+    window.parent?.postMessage({
+      kind: 'register-button',
+      label: 'Download Initial Values',
+      id: 'download-inital-values',
+    });
+
 
     window.parent?.postMessage({
       kind: 'register-knobs',
@@ -216,7 +223,7 @@
     const uniformCfg = UniformAdapter.create([
       { type: 'u32', size: 4, init: 25, name: 'year_per_country' },
       { type: 'u32', size: 4, init: size, name: 'observations' },
-      { type: 'u32', size: 4, init: inits.size, name: 'countries' },
+      { type: 'u32', size: 4, init: csv.getSize(inits), name: 'countries' },
       { type: 'u32', size: 4, init: 10, name: 'ralph_newton_iterations' },
     ]);
 
@@ -268,7 +275,7 @@
         { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
-      workGroups: inits.size,
+      workGroups: csv.getSize(inits),
       entryPoint: 'step1',
       entries: [
         { binding: 0, resource: { buffer: bufferCountryConfig } },
@@ -399,7 +406,7 @@
             'model-inputs.csv',
           );
 
-        case 'download-all':
+        case 'download-out':
           return await csv.downloadFile(
             csv.renameColumn(
               csv.dropColumn(df, [
@@ -412,6 +419,12 @@
               },
             ),
             'all-model-data-points.csv',
+          );
+
+        case 'download-inital-values':
+          return await csv.downloadFile(
+            inits,
+            'country-initialisation-values.csv',
           );
 
         default:
@@ -567,17 +580,19 @@
           ['countryIso', iso => iso === country],
         ]);
         const value = pwtTfpStock.ctfp[index];
-        return Number.isNaN(value) ? avgFtfpOf1999 : value;
+        return (value == null || Number.isNaN(value))
+          ? avgFtfpOf1999
+          : value;
       });
 
       const offsets = Array.from(joinGroup.groups.values(), row => row.offset);
 
-      const initalValues = {
+      const initalValues = csv.createDf({
+        countryIso: Array.from(joinGroup.groups.keys()),
         capital: new Float32Array(initCapital),
         technology: new Float32Array(initTFP),
         offsets: new Uint32Array(offsets),
-        size: offsets.length,
-      };
+      });
       return [size, joinGroup, join, initalValues];
     }
   </script>
