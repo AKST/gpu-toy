@@ -56,6 +56,11 @@
       align-items: center;
       border-bottom: 1px var(--color-border) solid;
     }
+    .header-end {
+      display: grid;
+      grid-gap: 16px;
+      grid-auto-flow: column;
+    }
     header, footer {
       padding-inline: 32px;
     }
@@ -84,7 +89,7 @@
 <body>
   <header>
     <h1>WebGPU Notebook</h1>
-    <div>
+    <div class="header-end">
       <x-attribution id="attribution"></x-attribution>
       <x-actions id="actions"></x-actions>
     </div>

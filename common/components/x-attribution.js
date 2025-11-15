@@ -15,7 +15,7 @@ export class AttributionElement extends HTMLElement {
   }
 
   flush() {
-    this.#root.childNodes.forEach(it => this.#root.removeChild(it));
+    this.#root.replaceChildren();
   }
 }
 

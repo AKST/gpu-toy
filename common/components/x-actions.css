@@ -1,5 +1,5 @@
-:host {
+.container {
   display: grid;
-  grid-gap: 16px;
+  grid-gap: 8px;
   grid-auto-flow: column;
 }

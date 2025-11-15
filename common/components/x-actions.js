@@ -1,4 +1,4 @@
-import { createStyleSheetLink } from './common/dom-kit.js';
+import { el, createStyleSheetLink } from './common/dom-kit.js';
 
 export class ActionsElement extends HTMLElement {
   #root = this.attachShadow({ mode: "open" });
@@ -16,18 +16,19 @@ export class ActionsElement extends HTMLElement {
       iframe.contentWindow.postMessage({ kind: 'action', id });
     });
 
-    this.#root.replaceChildren(...cssLinks);
+    this.container = el('div', { class: 'container' }, []);
+    this.#root.replaceChildren(...cssLinks, this.container);
   }
 
   addButton(label, id) {
     const button = document.createElement('button');
     button.appendChild(document.createTextNode(label));
     button.dataset.actionId = id;
-    this.#root.appendChild(button);
+    this.container?.appendChild(button);
   }
 
   flush() {
-    this.#root.childNodes.forEach(it => this.#root.removeChild(it));
+    this.container?.replaceChildren();
   }
 }
 

@@ -66,7 +66,8 @@ export class ConfigSideBarElement extends HTMLElement {
   }
 
   #setFieldsetDisplay(display) {
-    this.#root.querySelector('fieldset').style = display;
+    const fieldset = this.#root.querySelector('fieldset');
+    fieldset.style.display = display;
   }
 }
 

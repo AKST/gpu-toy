@@ -18,6 +18,87 @@
   </style>
 </head>
 <body>
+  <template id="model-syntax">
+    <h1>TFP growth via Phones & Internet</h1>
+    <math display="block">
+      <mover>
+        <mtable>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <msub>
+                <mi>A</mi>
+                <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+              </msub>
+              <mo>+</mo>
+              <mrow>
+                <mi>𝛽</mi>
+                <mo>·</mo>
+                <msub><mi>𝜑</mi><mi>t</mi></msub>
+              </mrow>
+              <mo>+</mo>
+              <mrow>
+                <mi>𝛾</mi>
+                <mo>·</mo>
+                <msub><mi>𝜓</mi><mi>t</mi></msub>
+              </mrow>
+            </mtd>
+          </mtr>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <mrow>
+                <msub>
+                  <mi>K</mi>
+                  <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+                </msub>
+                <mo>·</mo>
+                <mrow>
+                  <mo>(</mo>
+                  <mrow><mn>1</mn><mo>-</mo><mi>𝛿</mi></mrow>
+                  <mo>)</mo>
+                </mrow>
+              </mrow>
+              <mo>+</mo>
+              <mrow>
+                <mi>s</mi>
+                <mo>·</mo>
+                <msub><mi>Y</mi><mi>t</mi></msub>
+              </mrow>
+            </mtd>
+          </mtr>
+          <mtr>
+            <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
+            <mtd><mo>=</mo></mtd>
+            <mtd columnalign="left">
+              <msub><mi>A</mi><mi>t</mi></msub>
+              <mo>·</mo>
+              <msubsup>
+                <mi>L</mi>
+                <mi>t</mi>
+                <mi>𝛼</mi>
+              </msubsup>
+              <mo>·</mo>
+              <msubsup>
+                <mi>K</mi>
+                <mi>t</mi>
+                <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
+              </msubsup>
+            </mtd>
+          </mtr>
+        </mtable>
+        <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
+      </mover>
+    </math>
+    <h2>About</h2>
+    <p>
+      This model assumes all countries have TFP of 1000 at the start
+      (almost certianly incorrect), and this might be to explain for
+      the dramatically incorrect results for capital and output.
+    </p>
+  </template>
   <script>
     window.addEventListener('error', event => console.error(event.error));
     window.addEventListener('unhandledrejection', event => console.error(event.error));
@@ -30,9 +111,6 @@
     import { initWebGPU } from '../common/webgpu/init.js';
     import { createBuffer, createStep, createMapping } from '../common/webgpu/setup.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
-
-    const wait = t => (new Promise(r => setTimeout(() => r(), t)))
-    await wait(0);
 
     document.body.insertBefore(
       document.getElementById('model-syntax').content.cloneNode(true),
@@ -581,86 +659,5 @@
       out[idx].capital_steady_state = capital_steady_state_at(idx);
     }
   </script>
-  <template id="model-syntax">
-    <h1>TFP growth via Phones & Internet</h1>
-    <math display="block">
-      <mover>
-        <mtable>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <msub>
-                <mi>A</mi>
-                <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
-              </msub>
-              <mo>+</mo>
-              <mrow>
-                <mi>𝛽</mi>
-                <mo>·</mo>
-                <msub><mi>𝜑</mi><mi>t</mi></msub>
-              </mrow>
-              <mo>+</mo>
-              <mrow>
-                <mi>𝛾</mi>
-                <mo>·</mo>
-                <msub><mi>𝜓</mi><mi>t</mi></msub>
-              </mrow>
-            </mtd>
-          </mtr>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <mrow>
-                <msub>
-                  <mi>K</mi>
-                  <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
-                </msub>
-                <mo>·</mo>
-                <mrow>
-                  <mo>(</mo>
-                  <mrow><mn>1</mn><mo>-</mo><mi>𝛿</mi></mrow>
-                  <mo>)</mo>
-                </mrow>
-              </mrow>
-              <mo>+</mo>
-              <mrow>
-                <mi>s</mi>
-                <mo>·</mo>
-                <msub><mi>Y</mi><mi>t</mi></msub>
-              </mrow>
-            </mtd>
-          </mtr>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <msub><mi>A</mi><mi>t</mi></msub>
-              <mo>·</mo>
-              <msubsup>
-                <mi>L</mi>
-                <mi>t</mi>
-                <mi>𝛼</mi>
-              </msubsup>
-              <mo>·</mo>
-              <msubsup>
-                <mi>K</mi>
-                <mi>t</mi>
-                <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
-              </msubsup>
-            </mtd>
-          </mtr>
-        </mtable>
-        <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
-      </mover>
-    </math>
-    <h2>About</h2>
-    <p>
-      This model assumes all countries have TFP of 1000 at the start
-      (almost certianly incorrect), and this might be to explain for
-      the dramatically incorrect results for capital and output.
-    </p>
-  </template>
 </body>
 </html>
