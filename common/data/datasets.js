@@ -117,6 +117,7 @@ export const pwtCapitalStock = {
 };
 
 export const pwtTfpStock = {
+  avg1999: 0.636244538850831,
   source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
   url: '../files/2025-11-15T05-12_export.csv',
   headers: {

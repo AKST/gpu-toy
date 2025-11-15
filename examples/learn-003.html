@@ -11,8 +11,21 @@
     .container { display: none; }
     body {
       padding: 16px;
+    }
+    .text-container {
       margin: 0 auto;
       max-width: 550px;
+    }
+    table {
+      margin: 0 auto;
+      border-right: 0.5px solid white;
+      border-bottom: 0.5px solid white;
+      th { background: white; color: black }
+      & tr > :is(td,th) {
+        padding: 2px 4px;
+        border-left: 0.5px solid white;
+        border-top: 0.5px solid white;
+      }
     }
     * { box-sizing: border-box; color: white }
     ul { font-size: 12px; line-height: 1.5; }
@@ -21,144 +34,200 @@
 </head>
 <body>
   <template id="model-syntax">
-    <h1>TFP growth via Phones & Internet</h1>
-    <math display="block">
-      <mover>
-        <mtable>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <msub>
-                <mi>A</mi>
-                <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
-              </msub>
-              <mo>+</mo>
-              <mrow>
-                <mi>𝛽</mi>
-                <mo>·</mo>
-                <msub><mi>𝜑</mi><mi>t</mi></msub>
-              </mrow>
-              <mo>+</mo>
-              <mrow>
-                <mi>𝛾</mi>
-                <mo>·</mo>
-                <msub><mi>𝜓</mi><mi>t</mi></msub>
-              </mrow>
-            </mtd>
-          </mtr>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <mrow>
+    <div class="text-container">
+      <h1>TFP growth via Phones & Internet</h1>
+      <math display="block">
+        <mover>
+          <mtable>
+            <mtr>
+              <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
+              <mtd><mo>=</mo></mtd>
+              <mtd columnalign="left">
                 <msub>
-                  <mi>K</mi>
+                  <mi>A</mi>
                   <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
                 </msub>
-                <mo>·</mo>
+                <mo>+</mo>
                 <mrow>
-                  <mo>(</mo>
-                  <mrow><mn>1</mn><mo>-</mo><mi>𝛿</mi></mrow>
-                  <mo>)</mo>
+                  <mi>𝛽</mi>
+                  <mo>·</mo>
+                  <msub><mi>𝜑</mi><mi>t</mi></msub>
                 </mrow>
-              </mrow>
-              <mo>+</mo>
-              <mrow>
-                <mi>s</mi>
+                <mo>+</mo>
+                <mrow>
+                  <mi>𝛾</mi>
+                  <mo>·</mo>
+                  <msub><mi>𝜓</mi><mi>t</mi></msub>
+                </mrow>
+              </mtd>
+            </mtr>
+            <mtr>
+              <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
+              <mtd><mo>=</mo></mtd>
+              <mtd columnalign="left">
+                <mrow>
+                  <msub>
+                    <mi>K</mi>
+                    <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+                  </msub>
+                  <mo>·</mo>
+                  <mrow>
+                    <mo>(</mo>
+                    <mrow><mn>1</mn><mo>-</mo><mi>d</mi></mrow>
+                    <mo>)</mo>
+                  </mrow>
+                </mrow>
+                <mo>+</mo>
+                <mrow>
+                  <mi>s</mi>
+                  <mo>·</mo>
+                  <msub><mi>Y</mi><mi>t</mi></msub>
+                </mrow>
+              </mtd>
+            </mtr>
+            <mtr>
+              <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
+              <mtd><mo>=</mo></mtd>
+              <mtd columnalign="left">
+                <msub><mi>A</mi><mi>t</mi></msub>
                 <mo>·</mo>
-                <msub><mi>Y</mi><mi>t</mi></msub>
-              </mrow>
-            </mtd>
-          </mtr>
-          <mtr>
-            <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
-            <mtd><mo>=</mo></mtd>
-            <mtd columnalign="left">
-              <msub><mi>A</mi><mi>t</mi></msub>
-              <mo>·</mo>
-              <msubsup>
-                <mi>L</mi>
-                <mi>t</mi>
-                <mi>𝛼</mi>
-              </msubsup>
-              <mo>·</mo>
-              <msubsup>
-                <mi>K</mi>
-                <mi>t</mi>
-                <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
-              </msubsup>
-            </mtd>
-          </mtr>
-        </mtable>
-        <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
-      </mover>
-    </math>
-    <h2>About</h2>
-    <p>
-      This model assumes all countries have TFP of 1000 at the start
-      (almost certianly incorrect), and this might be to explain for
-      the dramatically incorrect results for capital and output.
-    </p>
-    <hr>
-    <h2>Data Source</h2>
-    <ul>
-      <li>
-        <b>phoneInternet, phoneUsage</b>:
-        <ul>
-          <li><b>Source</b>: <a href="https://datahub.itu.int/dashboards/">ITU data base</a></li>
-        </ul>
-      </li>
-      <li>
-        <b>capitalPPP, ctfp</b>:
-        <ul>
-          <li><b>Source</b>: <a href="https://pwt-data-tool.streamlit.app">Penn World Trade Table</a></li>
-          <li>
-            <b>Usage</b>: the value for captial in 1999 was used for initial capial at the start of 2000.
-            And I did something simlar for TFP, when there was no value I used
-            the average TFP from 1999 instead, which is almost certainly higher
-            than it probably should be for those countries without it.
-            (the average CTFP from 1999 is <b>0.636244538850831</b> btw)
-          </li>
-        </ul>
-      </li>
-      <li>
-        <b>labourForce, population, unemployment</b>:
-        <ul>
-          <li><b>Source</b>: World Bank</li>
-        </ul>
-      </li>
-      <li>
-        <b>employed</b>:
-        <ul>
-          <li><b>Computed</b>: From LF*(1-(unemployment/100))</li>
-        </ul>
-      </li>
-      <li>
-        <b>computed_{output,capital,capitalSteadyState,technology}</b>:
-        <ul>
-          <li><b>About</b>: this is the output from the model</li>
-        </ul>
-      </li>
-      <li>
-        Field <b>faked_askAngusWhatThatMeans</b>:
-        <ul>
-          <li>
-            <b>About</b>: So basically this fields demarks where
-            I just filled in missing data entries by repeating the
-            previous period. If the first period was missing I
-            just used 0. This is obviously unideal, but I mean what
-            can you do.
-          </li>
-        </ul>
-      </li>
-      <li>
-        Field <b>difference_in_{phoneInternet,phoneUsage}</b>:
-        <ul>
-          <li><b>About</b>: these are computed deltas in usage of phone and internet</li>
-        </ul>
-      </li>
-    </ul>
+                <msubsup>
+                  <mi>L</mi>
+                  <mi>t</mi>
+                  <mi>𝛼</mi>
+                </msubsup>
+                <mo>·</mo>
+                <msubsup>
+                  <mi>K</mi>
+                  <mi>t</mi>
+                  <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
+                </msubsup>
+              </mtd>
+            </mtr>
+          </mtable>
+          <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
+        </mover>
+      </math>
+      <h2>About</h2>
+      <p>
+        This model assumes all countries have TFP of 1000 at the start
+        (almost certianly incorrect), and this might be to explain for
+        the dramatically incorrect results for capital and output.
+      </p>
+      <hr>
+      <h2>Data Sources</h2>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Source</th>
+          <th>About</th>
+          <th>Data Cleaning</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>phoneInternet</td>
+          <td><a href="https://datahub.itu.int/dashboards/">ITU</a></td>
+          <td>Mobile broadband subscription rate</td>
+          <td>Forward-filled missing values</td>
+        </tr>
+        <tr>
+          <td>phoneUsage</td>
+          <td><a href="https://datahub.itu.int/dashboards/">ITU</a></td>
+          <td>Mobile phone subscription rate</td>
+          <td>Forward-filled missing values</td>
+        </tr>
+        <tr>
+          <td>capitalPPP</td>
+          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td>Capital stock (PPP adjusted)</td>
+          <td>1999 value used for initial capital at start of 2000</td>
+        </tr>
+        <tr>
+          <td>ctfp</td>
+          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td>Total Factor Productivity</td>
+          <td>1999 value used; missing values filled with 1999 average (0.636244538850831)</td>
+        </tr>
+        <tr>
+          <td>labourForce</td>
+          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td>Total labor force</td>
+          <td>Forward-filled missing values</td>
+        </tr>
+        <tr>
+          <td>population</td>
+          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td>Total population</td>
+          <td>Forward-filled missing values</td>
+        </tr>
+        <tr>
+          <td>unemployment</td>
+          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td>Unemployment rate (%)</td>
+          <td>Forward-filled missing values</td>
+        </tr>
+      </tbody>
+      <caption>
+        <p>Input Variables</p>
+      </caption>
+    </table>
+    <table>
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>About</th>
+          <th>Data Cleaning</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>employed</td>
+          <td>LF × (1 - unemployment/100)</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>difference_in_phoneInternet</td>
+          <td>Period-over-period change in internet usage</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>difference_in_phoneUsage</td>
+          <td>Period-over-period change in phone usage</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>computed_output</td>
+          <td>Output (Y) from Cobb-Douglas production function</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>computed_capital</td>
+          <td>Capital stock (K) from accumulation equation</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>computed_capitalSteadyState</td>
+          <td>Steady-state capital given current technology and labor</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>computed_technology</td>
+          <td>Total Factor Productivity (A) with phone/internet effects</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>faked_askAngusWhatThatMeans</td>
+          <td>Flags which observations had missing data</td>
+          <td>Forward-filled from previous period; first period missing = 0</td>
+        </tr>
+      </tbody>
+      <caption>
+        <p>Output Variables</p>
+      </caption>
+    </table>
   </template>
   <script>
     window.addEventListener('error', event => console.error(event.error));
@@ -247,14 +316,16 @@
       inits.technology,
     ], COPY_DST);
 
-    // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
+    // Combined output buffer: struct has 5 f32s per row (technology, capital, capital_steady_state, output, employed)
     const combinedOutputData = new Float32Array(new Array(size * 5).fill(0));
     const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
 
-    const bufferPhoneUsage = createBuffer(device, df.phoneUsageD, COPY_DST);
-    const bufferPhoneInternet = createBuffer(device, df.phoneInternetD, COPY_DST);
-    const bufferUnemployment = createBuffer(device, df.unemployment, COPY_DST);
-    const bufferLabourForce = createBuffer(device, df.labourForce, COPY_DST);
+    const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
+      df.unemployment,
+      df.labourForce,
+      df.phoneUsageD,
+      df.phoneInternetD,
+    ], COPY_DST);
     const bufferUnifExo = uniformExo.createBuffer(device);
     const bufferUnifEff = uniformEff.createBuffer(device);
     const bufferUnifCfg = uniformCfg.createBuffer(device);
@@ -279,14 +350,8 @@
       entryPoint: 'step1',
       entries: [
         { binding: 0, resource: { buffer: bufferCountryConfig } },
-
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
-
-        { binding: 20, resource: { buffer: bufferPhoneUsage } },
-        { binding: 21, resource: { buffer: bufferPhoneInternet } },
-
-        { binding: 30, resource: { buffer: bufferUnemployment } },
-        { binding: 31, resource: { buffer: bufferLabourForce } },
+        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
       ],
     });
 
@@ -423,7 +488,10 @@
 
         case 'download-inital-values':
           return await csv.downloadFile(
-            inits,
+            csv.renameColumn(inits, {
+              technology: 'ctfp_1999_or_avg',
+              capital: 'capital_1999',
+            }),
             'country-initialisation-values.csv',
           );
 
@@ -580,9 +648,8 @@
           ['countryIso', iso => iso === country],
         ]);
         const value = pwtTfpStock.ctfp[index];
-        return (value == null || Number.isNaN(value))
-          ? avgFtfpOf1999
-          : value;
+        const weird = (value == null || Number.isNaN(value) || value == 0);
+        return weird ? datasets.pwtTfpStock.avg1999 : value;
       });
 
       const offsets = Array.from(joinGroup.groups.values(), row => row.offset);
@@ -629,18 +696,20 @@
       init_technology: f32,
     }
 
+    struct AuxiliaryTimeSeries {
+      unemployment: f32,
+      labour_force: f32,
+      growth_phone_use: f32,
+      growth_internet_use: f32,
+    }
+
     @group(1) @binding(0) var<uniform> exo: ExogenousState;
     @group(1) @binding(1) var<uniform> effects: Effects;
     @group(1) @binding(2) var<uniform> config: Config;
 
     @group(0) @binding(0) var<storage, read> country_config: array<CountryConfig>;
-
     @group(0) @binding(10) var<storage, read_write> out: array<ComputedState>;
-
-    @group(0) @binding(20) var<storage, read> growth_phoneuse: array<f32>;
-    @group(0) @binding(21) var<storage, read> growth_netuse: array<f32>;
-    @group(0) @binding(30) var<storage, read> unemployment: array<f32>;
-    @group(0) @binding(31) var<storage, read> labourForce: array<f32>;
+    @group(0) @binding(20) var<storage, read> aux: array<AuxiliaryTimeSeries>;
 
     /**
      * Uses ralph newton to solve for capital
@@ -689,7 +758,6 @@
         if (abs(k_safe - k_scaled) < 1e-6 * max(abs(k_scaled), 1.0)) {
          return k_safe * scale;
         }
-
         k_scaled = k_safe;
       }
 
@@ -711,10 +779,10 @@
      * Compute Output, Capital, Technology, Labour at period t.
      */
     fn compute_yktl_at(t: u32, last_tech: f32, last_kaptial: f32) -> vec4<f32> {
-      let a_growth_phone = growth_phoneuse[t] * effects.phone_fixed;
-      let a_growth_net = growth_netuse[t] * effects.net_exp;
+      let a_growth_phone = aux[t].growth_phone_use * effects.phone_fixed;
+      let a_growth_net = aux[t].growth_internet_use * effects.net_exp;
       let a = a_growth_phone + a_growth_net + last_tech;
-      let l = labourForce[t] * (100.0 - unemployment[t]) * (1.0/100.0);
+      let l = aux[t].labour_force * (100.0 - aux[t].unemployment) * (1.0/100.0);
       let k = ralph_newton_capital(last_kaptial, a, l);
       let y = a * pow(l, exo.alpha) * pow(k, 1 - exo.alpha);
       return vec4(y, k, a, l);
