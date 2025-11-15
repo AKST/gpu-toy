@@ -549,20 +549,51 @@
         wbPop,
         wbLabourForce,
         wbUnemployment,
+        wbSavings,
         pwtStock,
         pwtTfpStock,
+        pwtAvgDepreciation,
+        pwtLabourShare,
       ] = await Promise.all([
         fetching.loadItuData(datasets.ituCellPhones),
         fetching.loadItuData(datasets.ituMobileBoardBandSubcriptions),
         fetching.loadWideData(datasets.wbPopulation),
         fetching.loadWideData(datasets.wbLabourForce),
         fetching.loadWideData(datasets.wbUnemployment),
+        fetching.loadWideData(datasets.wbSavingsRateOfGDP),
         fetching.loadWideData(datasets.pwtCapitalStock),
         fetching.loadWideData(datasets.pwtTfpStock),
+        fetching.loadWideData(datasets.pwtAvgDepreciation),
+        fetching.loadWideData(datasets.pwtLabourShare),
       ]);
 
+      // insert any safe values if there's risk of data being dropped.
+      const countryIsos = [...(new Set(wbPop.countryIso.concat(pwtStock.countryIso)))].sort();
+      for (const [col, ds, df] of [
+        ['gross_savings_pct', datasets.wbSavingsRateOfGDP, wbSavings],
+        ['avgDepreciation', datasets.pwtAvgDepreciation, pwtAvgDepreciation],
+        ['labours_share', datasets.pwtLabourShare, pwtLabourShare],
+      ]) {
+        for (const country of countryIsos) {
+          const index = csv.findIndex(df, [
+            ['year', year => year === 2000],
+            ['countryIso', iso => iso === country],
+          ]);
+          if (index == null) continue;
+          const value = df[col][index];
+          const weird = (value == null || Number.isNaN(value) || value == 0);
+          if (weird) {
+            df[col][index] = ds.avg2000;
+          }
+        }
+      }
+
       let join = csv.outerJoins(
-        [ituPhone, ituMobileInternet, wbPop, wbLabourForce, wbUnemployment, pwtStock, pwtTfpStock],
+        [
+          ituPhone, ituMobileInternet, wbPop, wbLabourForce,
+          wbUnemployment, pwtStock, pwtTfpStock,
+          wbSavings, pwtAvgDepreciation, pwtLabourShare,
+        ],
         ['countryIso', 'year'],
       );
       join = csv.filter(join, 'year', year => !Number.isNaN(year) && year > 1999);

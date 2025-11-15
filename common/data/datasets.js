@@ -98,6 +98,20 @@ export const wbUnemployment = {
   },
 };
 
+export const wbSavingsRateOfGDP = {
+  avg2000: 0.25,
+  source: 'https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS',
+  url: '../files/API_NY.GNS.ICTR.ZS_DS2_en_csv_v2_156757.csv',
+  dropRows: 4,
+  headers: {
+    load: wbColumns,
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'gross_savings_pct', key: 'year' },
+    },
+  },
+};
+
 export const pwtCapitalStock = {
   source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
   url: '../files/2025-11-12T08-48_export.csv',
@@ -118,7 +132,7 @@ export const pwtCapitalStock = {
 
 export const pwtTfpStock = {
   avg1999: 0.636244538850831,
-  source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
+  source: 'https://www.rug.nl/ggdc/productivity/pwt/',
   url: '../files/2025-11-15T05-12_export.csv',
   headers: {
     load: [
@@ -131,6 +145,44 @@ export const pwtTfpStock = {
     long: {
       retain: ['countryIso'],
       colout: { val: 'ctfp', key: 'year' },
+    },
+  },
+};
+
+export const pwtAvgDepreciation = {
+  avg2000: 0.043634836264368,
+  source: 'https://www.rug.nl/ggdc/productivity/pwt/',
+  url: '../files/2025-11-15T08-50_export.csv',
+  headers: {
+    load: [
+      { type: 'string', name: 'ISO code', rename: 'countryIso' },
+      { drop: true, type: 'string', name: 'Country' },
+      { drop: true, type: 'string', name: 'Variable code' },
+      { drop: true, type: 'string', name: 'Variable name' },
+      ...pwtCtfpYears,
+    ],
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'avgDepreciation', key: 'year' },
+    },
+  },
+};
+
+export const pwtLabourShare = {
+  avg2000: 0.043634836264368,
+  source: 'https://www.rug.nl/ggdc/productivity/pwt/',
+  url: '../files/2025-11-15T09-02_export.csv',
+  headers: {
+    load: [
+      { type: 'string', name: 'ISO code', rename: 'countryIso' },
+      { drop: true, type: 'string', name: 'Country' },
+      { drop: true, type: 'string', name: 'Variable code' },
+      { drop: true, type: 'string', name: 'Variable name' },
+      ...pwtCtfpYears,
+    ],
+    long: {
+      retain: ['countryIso'],
+      colout: { val: 'labours_share', key: 'year' },
     },
   },
 };
