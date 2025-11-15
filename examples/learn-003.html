@@ -110,9 +110,11 @@
       </math>
       <h2>About</h2>
       <p>
-        This model assumes all countries have TFP of 1000 at the start
+        This model <s>assumes all countries have TFP of 1000 at the start
         (almost certianly incorrect), and this might be to explain for
-        the dramatically incorrect results for capital and output.
+        the dramatically incorrect results for capital and output</s>,
+        may produce weird results when countries are missing enough
+        data points for inputs.
       </p>
       <hr>
       <h2>Data Sources</h2>
@@ -129,61 +131,61 @@
       <tbody>
         <tr>
           <td>phoneInternet</td>
-          <td><a href="https://datahub.itu.int/dashboards/">ITU</a></td>
+          <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
           <td>Mobile broadband subscription rate</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
           <td>phoneUsage</td>
-          <td><a href="https://datahub.itu.int/dashboards/">ITU</a></td>
+          <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
           <td>Mobile phone subscription rate</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
           <td>capitalPPP</td>
-          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
           <td>Capital stock (PPP adjusted)</td>
           <td>1999 value used for initial capital at start of 2000</td>
         </tr>
         <tr>
           <td>ctfp</td>
-          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
           <td>Total Factor Productivity</td>
           <td>1999 value used; missing values filled with 1999 average (0.636244538850831)</td>
         </tr>
         <tr>
           <td>labourForce</td>
-          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td><a target="_blank" href="https://data.worldbank.org/indicator/SL.TLF.TOTL.IN">World Bank</a></td>
           <td>Total labor force</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
           <td>population</td>
-          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td><a target="_blank" href="https://data.worldbank.org/indicator/SP.POP.TOTL">World Bank</a></td>
           <td>Total population</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
           <td>unemployment</td>
-          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td><a target="_blank" href="https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS">World Bank</a></td>
           <td>Unemployment rate (%)</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
           <td>laboursShare</td>
-          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
           <td>Labor's share of income (α)</td>
           <td>Forward-filled missing values; 2000 values filled with average when missing</td>
         </tr>
         <tr>
           <td>grossSavingsPct</td>
-          <td><a href="https://data.worldbank.org/">World Bank</a></td>
+          <td><a target="_blank" href="https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS">World Bank</a></td>
           <td>Gross savings as % of GDP</td>
           <td>Forward-filled missing values; 2000 values filled with average when missing</td>
         </tr>
         <tr>
           <td>avgDepreciation</td>
-          <td><a href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+          <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
           <td>Average depreciation rate (δ)</td>
           <td>Forward-filled missing values; 2000 values filled with average when missing</td>
         </tr>
