@@ -495,7 +495,6 @@
       let base_term = 1.0 - exo.depreciation;
       let coeff = exo.saving * tech * pow(labour, exo.alpha) * pow(scale, -exo.alpha);
       var k_scaled = 1.0;
-      let damping = 0.5;
 
       for (var i = 0u; i < config.ralph_newton_iterations; i++) {
         let k_pow_beta = pow(k_scaled, 1.0 - exo.alpha);
@@ -503,14 +502,23 @@
         let f = k_scaled - coeff * k_pow_beta - base_term;
         let f_prime = 1.0 - coeff * (1.0 - exo.alpha) * k_pow_neg_alpha;
 
-        if (abs(f_prime) < 1e-8) { break; }
+        // If derivative is negative or too small, the Newton step is unreliable
+        // In this case, use a fixed point iteration step instead
+        var k_new: f32;
 
-        let step = f / f_prime;
-        let k_new = k_scaled - damping * step;
-        let k_safe = max(k_new, 0.1);
+        if (f_prime < 0.1) {
+          // Fixed point: k_new = coeff * k^(1-α) + base_term
+          k_new = coeff * k_pow_beta + base_term;
+        } else {
+          // Newton-Raphson step with adaptive damping
+          let step = f / f_prime;
+          let damping = select(0.7, 0.5, f_prime < 0.5);
+          k_new = k_scaled - damping * step;
+        }
 
-        if (abs(k_safe - k_scaled) < 1e-6 * abs(k_scaled)) {
-          return k_safe * scale;
+        let k_safe = max(k_new, 0.5);
+        if (abs(k_safe - k_scaled) < 1e-6 * max(abs(k_scaled), 1.0)) {
+         return k_safe * scale;
         }
 
         k_scaled = k_safe;
