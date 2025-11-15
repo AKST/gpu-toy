@@ -273,10 +273,11 @@
     window.parent?.postMessage({
       kind: 'register-knobs',
       knobs: [
-        // { kind: 'title', title: 'Exogenous Variables' },
-        // { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
-        // { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
-        // { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
+        { kind: 'boolean', name: 'useFixedParams', label: 'Use Fixed Parameters', init: false },
+        { kind: 'title', title: 'Exogenous Variables' },
+        { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
+        { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
+        { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
         { kind: 'title', title: 'Fixed Effects' },
         { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
         { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
@@ -298,13 +299,14 @@
       { type: 'u32', size: 4, init: size, name: 'observations' },
       { type: 'u32', size: 4, init: csv.getSize(inits), name: 'countries' },
       { type: 'u32', size: 4, init: 10, name: 'ralph_newton_iterations' },
+      { type: 'u32', size: 4, init: 0, name: 'use_fixed_params' },
     ]);
 
-    // const uniformExo = UniformAdapter.create([
-    //   { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
-    //   { type: 'f32', size: 4, init: 0.4, name: 'saving' },
-    //   { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
-    // ]);
+    const uniformExo = UniformAdapter.create([
+      { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
+      { type: 'f32', size: 4, init: 0.4, name: 'saving' },
+      { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
+    ]);
 
     const uniformEff = UniformAdapter.create([
       { type: 'f32', size: 4, init: INIT_COEFF_PHONE, name: 'phoneEffect' },
@@ -337,12 +339,9 @@
       df.avgDepreciation,
     ], COPY_DST);
 
+    const bufferUnifExo = uniformExo.createBuffer(device);
     const bufferUnifEff = uniformEff.createBuffer(device);
     const bufferUnifCfg = uniformCfg.createBuffer(device);
-
-    const uniformBindGrp = [
-      { binding: 1, resource: { buffer: bufferUnifEff } },
-    ];
 
     const shaderCode = document.getElementById('compute-shader').textContent;
     const shaderModule = device.createShaderModule({ code: shaderCode });
@@ -351,6 +350,7 @@
       device,
       shaderModule,
       uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
@@ -368,6 +368,7 @@
       device,
       shaderModule,
       uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: Math.ceil(size / 64),
@@ -448,9 +449,15 @@
 
     async function updateUniforms(data) {
       console.log(data);
+      uniformExo.update('alpha', data.alpha);
+      uniformExo.update('saving', data.saving);
+      uniformExo.update('depreciation', data.depreciation);
       uniformEff.update('phoneEffect', data.phoneEffect);
       uniformEff.update('phoneInternet', data.phoneInternet);
+      uniformCfg.update('use_fixed_params', data.useFixedParams ? 1 : 0);
+      uniformExo.updateBuffer(device, bufferUnifExo);
       uniformEff.updateBuffer(device, bufferUnifEff);
+      uniformCfg.updateBuffer(device, bufferUnifCfg);
       await runGPU();
       showLog('done');
     }
@@ -732,6 +739,7 @@
       observations: u32,
       countries: u32,
       ralph_newton_iterations: u32,
+      use_fixed_params: u32,
     };
 
     struct Effects {
@@ -739,11 +747,6 @@
       net_exp: f32,
     };
 
-    struct ExogenousState {
-      alpha: f32,
-      saving: f32,
-      depreciation: f32,
-    };
 
     struct ComputedState {
       technology: f32,
@@ -772,6 +775,7 @@
       growth_internet_use: f32,
     }
 
+    @group(1) @binding(0) var<uniform> exo: PrimaryTimeSeries;
     @group(1) @binding(1) var<uniform> effects: Effects;
     @group(1) @binding(2) var<uniform> config: Config;
 
@@ -838,22 +842,27 @@
      *
      * K(t) = Labour * ((saving*technology)/depreciation)^(1/alpha)
      */
-    fn capital_steady_state_at(t: u32) -> f32 {
-      let numer = primary[t].saving * out[t].technology;
-      let denom = primary[t].depreciation;
-      return out[t].employed * pow(numer/denom, 1.0/primary[t].alpha);
+    fn capital_steady_state_at(p: PrimaryTimeSeries, state: ComputedState) -> f32 {
+      let numer = p.saving * state.technology;
+      let denom = p.depreciation;
+      return state.employed * pow(numer/denom, 1.0/p.alpha);
     }
 
     /**
      * Compute Output, Capital, Technology, Labour at period t.
      */
-    fn compute_yktl_at(t: u32, last_tech: f32, last_kaptial: f32) -> vec4<f32> {
-      let a_growth_phone = aux[t].growth_phone_use * effects.phone_fixed;
-      let a_growth_net = aux[t].growth_internet_use * effects.net_exp;
+    fn compute_yktl_at(
+      p: PrimaryTimeSeries,
+      aux: AuxiliaryTimeSeries,
+      last_tech: f32,
+      last_kaptial: f32,
+    ) -> vec4<f32> {
+      let a_growth_phone = aux.growth_phone_use * effects.phone_fixed;
+      let a_growth_net = aux.growth_internet_use * effects.net_exp;
       let a = a_growth_phone + a_growth_net + last_tech;
-      let l = aux[t].labour_force * (100.0 - aux[t].unemployment) * (1.0/100.0);
-      let k = ralph_newton_capital(primary[t], last_kaptial, a, l);
-      let y = a * pow(l, primary[t].alpha) * pow(k, 1 - primary[t].alpha);
+      let l = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
+      let k = ralph_newton_capital(p, last_kaptial, a, l);
+      let y = a * pow(l, p.alpha) * pow(k, 1 - p.alpha);
       return vec4(y, k, a, l);
     }
 
@@ -869,7 +878,7 @@
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
-        let yktl = compute_yktl_at(idx, last_t, last_k);
+        let yktl = compute_yktl_at(primary[idx], aux[idx], last_t, last_k);
         last_k = yktl.y;
         last_t = yktl.z;
         out[idx].output = yktl.x;
@@ -884,7 +893,11 @@
       let idx = global_id.x;
       if (idx >= config.observations) { return; }
 
-      out[idx].capital_steady_state = capital_steady_state_at(idx);
+      if (config.use_fixed_params == 1u) {
+        out[idx].capital_steady_state = capital_steady_state_at(exo, out[idx]);
+      } else {
+        out[idx].capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
+      }
     }
   </script>
 </body>

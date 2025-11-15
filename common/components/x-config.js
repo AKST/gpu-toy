@@ -19,6 +19,10 @@ function * createConfigRowItems(configRows) {
         yield * [label, input];
         break;
       }
+      case 'button': {
+        // TODO
+        break;
+      }
       case 'title': {
         yield el('label', { style: 'font-weight: bold' }, [config.title]);
         break;
