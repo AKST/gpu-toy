@@ -42,6 +42,24 @@ export function initStructArrayBuffer(device, arrays, flag) {
   return buffer;
 }
 
+export function extractStructArrays(structBuffer, outputArrays) {
+  const length = outputArrays[0].length;
+  const fieldsPerStruct = outputArrays.length;
+  const f32View = new Float32Array(structBuffer.buffer || structBuffer);
+  const u32View = new Uint32Array(structBuffer.buffer || structBuffer);
+
+  for (let i = 0; i < length; i++) {
+    for (let j = 0; j < fieldsPerStruct; j++) {
+      const idx = i * fieldsPerStruct + j;
+      if (outputArrays[j] instanceof Uint32Array) {
+        outputArrays[j][i] = u32View[idx];
+      } else {
+        outputArrays[j][i] = f32View[idx];
+      }
+    }
+  }
+}
+
 export function createStep({
   device,
   shaderModule,

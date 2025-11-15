@@ -164,7 +164,7 @@
     import * as csv from '../common/data/csv.js';
     import * as datasets from '../common/data/datasets.js';
     import { initWebGPU } from '../common/webgpu/init.js';
-    import { createBuffer, createStep, createMapping } from '../common/webgpu/setup.js';
+    import { createBuffer, createStep, createMapping, initStructArrayBuffer, extractStructArrays } from '../common/webgpu/setup.js';
     import { UniformAdapter } from '../common/webgpu/uniforms.js';
 
     document.body.insertBefore(
@@ -230,8 +230,7 @@
     device.pushErrorScope('validation');
 
     const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-    const bufferNationOffset = createBuffer(device, inits.offsets, COPY_DST);
-    const bufferNationCapitalInit = createBuffer(device, inits.capital, COPY_DST);
+    const bufferCountryConfig = initStructArrayBuffer(device, [inits.offsets, inits.capital], COPY_DST);
 
     // Combined output buffer: struct has 4 f32s per row (technology, capital, capital_steady_state, output)
     const combinedOutputData = new Float32Array(new Array(size * 5).fill(0));
@@ -264,8 +263,7 @@
       workGroups: inits.size,
       entryPoint: 'step1',
       entries: [
-        { binding: 0, resource: { buffer: bufferNationOffset } },
-        { binding: 1, resource: { buffer: bufferNationCapitalInit } },
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
 
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
 
@@ -324,19 +322,19 @@
         device.queue.submit([commandEncoder.finish()]);
         await mapping.read();
 
-        for (let i = 0; i < size; i++) {
-          df.computed_technology[i] = combinedOutputData[i * 5 + 0];
-          df.computed_capital[i] = combinedOutputData[i * 5 + 1];
-          df.computed_capitalSteadyState[i] = combinedOutputData[i * 5 + 2];
-          df.computed_output[i] = combinedOutputData[i * 5 + 3];
-          df.employed[i] = combinedOutputData[i * 5 + 4]
-        }
+        extractStructArrays(combinedOutputData, [
+          df.computed_technology,
+          df.computed_capital,
+          df.computed_capitalSteadyState,
+          df.computed_output,
+          df.employed,
+        ]);
 
         showLog('Output results:', [...df.computed_output.slice(0, 10)]);
         showLog('Captial results:', [...df.computed_capital.slice(0, 10)]);
         showLog('Employed results:', [...df.employed.slice(0, 10)]);
         showLog('Technology results:', [...df.computed_technology.slice(0, 10)]);
-        showLog('Capital steady state results:', [...df.capitalSteadyState.slice(0, 10)]);
+        showLog('Capital steady state results:', [...df.computed_capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
       } catch (e) {
         console.error(e);
@@ -603,8 +601,7 @@
     @group(1) @binding(1) var<uniform> effects: Effects;
     @group(1) @binding(2) var<uniform> config: Config;
 
-    @group(0) @binding(0) var<storage, read> offsets: array<u32>;
-    @group(0) @binding(1) var<storage, read> capital_init: array<f32>;
+    @group(0) @binding(0) var<storage, read> country_config: array<CountryConfig>;
 
     @group(0) @binding(10) var<storage, read_write> out: array<ComputedState>;
 
@@ -697,8 +694,8 @@
     @compute @workgroup_size(1)
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (global_id.x >= config.countries) { return; }
-      let offset: u32 = offsets[global_id.x];
-      var last_k: f32 = capital_init[global_id.x];
+      let offset: u32 = country_config[global_id.x].idx_offset;
+      var last_k: f32 = country_config[global_id.x].init_capital;
       var last_t: f32 = exo.tech_init;
 
       for (var i = 0u; i < config.year_per_country; i++) {
