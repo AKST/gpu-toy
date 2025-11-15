@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <base target="_blank">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="application-name" content="TFP Growth Model" lang="en" />
@@ -28,8 +29,7 @@
       }
     }
     * { box-sizing: border-box; color: white }
-    ul { font-size: 12px; line-height: 1.5; }
-    li + li { margin-top: 16px; }
+    p, ul { line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -116,7 +116,11 @@
         may produce weird results when countries are missing enough
         data points for inputs.
       </p>
-      <hr>
+      <h2>Models</h2>
+      <ul>
+        <li>Version A, 𝜑ₜ and 𝜓ₜ return number connection</li>
+        <li>Version B, 𝜑ₜ and 𝜓ₜ return (number connection) / population</li>
+      </ul>
       <h2>Data Sources</h2>
     </div>
     <table>
@@ -270,39 +274,41 @@
     const INIT_COEFF_PHONE = 0.00000001;
     const INIT_COEFF_INTERNET = 0.00000001;
 
-    window.addEventListener('message', onMessage);
-    window.parent?.postMessage({
-      kind: 'register-button',
-      label: 'Download Inputs',
-      id: 'download-inputs',
-    });
+    {
+      window.addEventListener('message', onMessage);
+      window.parent?.postMessage({
+        kind: 'register-button',
+        label: 'Download Inputs',
+        id: 'download-inputs',
+      });
 
-    window.parent?.postMessage({
-      kind: 'register-button',
-      label: 'Download All',
-      id: 'download-out',
-    });
+      window.parent?.postMessage({
+        kind: 'register-button',
+        label: 'Download All',
+        id: 'download-out',
+      });
 
-    window.parent?.postMessage({
-      kind: 'register-button',
-      label: 'Download Initial Values',
-      id: 'download-inital-values',
-    });
+      window.parent?.postMessage({
+        kind: 'register-button',
+        label: 'Download Initial Values',
+        id: 'download-inital-values',
+      });
 
 
-    window.parent?.postMessage({
-      kind: 'register-knobs',
-      knobs: [
-        { kind: 'boolean', name: 'useFixedParams', label: 'Exogenous (𝛼, s, d)', init: false },
-        { kind: 'title', title: 'Exogenous Variables' },
-        { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
-        { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
-        { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
-        { kind: 'title', title: 'Fixed Effects' },
-        { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
-        { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
-      ],
-    });
+      window.parent?.postMessage({
+        kind: 'register-knobs',
+        knobs: [
+          { kind: 'boolean', name: 'useFixedParams', label: 'Exogenous (𝛼, s, d)', init: false },
+          { kind: 'title', title: 'Exogenous Variables' },
+          { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
+          { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
+          { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
+          { kind: 'title', title: 'Fixed Effects' },
+          { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
+          { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
+        ],
+      });
+    }
 
     const { canvas, adpater, device } = await initWebGPU();
 
@@ -431,18 +437,26 @@
         await mapping.read();
 
         extractStructArrays(combinedOutputData, [
-          df.computed_technology,
-          df.computed_capital,
-          df.computed_capitalSteadyState,
-          df.computed_output,
           df.employed,
+          df.out_a_technology,
+          df.out_a_capital,
+          df.out_a_capitalSteadyState,
+          df.out_a_output,
+          df.out_b_technology,
+          df.out_b_capital,
+          df.out_b_capitalSteadyState,
+          df.out_b_output,
         ]);
 
-        showLog('Output results:', [...df.computed_output.slice(0, 10)]);
-        showLog('Captial results:', [...df.computed_capital.slice(0, 10)]);
+
         showLog('Employed results:', [...df.employed.slice(0, 10)]);
-        showLog('Technology results:', [...df.computed_technology.slice(0, 10)]);
-        showLog('Capital steady state results:', [...df.computed_capitalSteadyState.slice(0, 10)]);
+        showLog('(B) Output results:', [...df.out_b_output.slice(0, 10)]);
+        showLog('(B) Captial results:', [...df.out_b_capital.slice(0, 10)]);
+        showLog('(B) Technology results:', [...df.out_b_technology.slice(0, 10)]);
+        showLog('(A) Output results:', [...df.out_a_output.slice(0, 10)]);
+        showLog('(A) Captial results:', [...df.out_a_capital.slice(0, 10)]);
+        showLog('(A) Technology results:', [...df.out_a_technology.slice(0, 10)]);
+        showLog('Capital steady state results:', [...df.out_a_capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
       } catch (e) {
         console.error(e);
@@ -676,10 +690,14 @@
 
       const size = csv.getSize(join);
       join.employed = new Float32Array(size);
-      join.computed_technology = new Float32Array(size);
-      join.computed_capitalSteadyState = new Float32Array(size);
-      join.computed_capital = new Float32Array(size);
-      join.computed_output = new Float32Array(size);
+      join.out_a_technology = new Float32Array(size);
+      join.out_a_capitalSteadyState = new Float32Array(size);
+      join.out_a_capital = new Float32Array(size);
+      join.out_a_output = new Float32Array(size);
+      join.out_b_technology = new Float32Array(size);
+      join.out_b_capitalSteadyState = new Float32Array(size);
+      join.out_b_capital = new Float32Array(size);
+      join.out_b_output = new Float32Array(size);
 
       join.phoneUsageD = new Float32Array(size);
       join.phoneInternetD = new Float32Array(size);
@@ -767,13 +785,17 @@
       net_exp: f32,
     };
 
-
-    struct ComputedState {
+    struct ModelOutput {
       technology: f32,
       capital: f32,
       capital_steady_state: f32,
       output: f32,
+    }
+
+    struct ComputedState {
       employed: f32,
+      model_a: ModelOutput,
+      model_b: ModelOutput,
     }
 
     struct CountryConfig {
@@ -863,7 +885,7 @@
      * K(t) = Labour * ((saving*technology)/depreciation)^(1/alpha)
      */
     fn capital_steady_state_at(p: PrimaryTimeSeries, state: ComputedState) -> f32 {
-      let numer = p.saving * state.technology;
+      let numer = p.saving * state.model_a.technology;
       let denom = p.depreciation;
       return state.employed * pow(numer/denom, 1.0/p.alpha);
     }
@@ -908,9 +930,9 @@
 
         last_k = yktl.y;
         last_t = yktl.z;
-        out[idx].output = yktl.x;
-        out[idx].capital = yktl.y;
-        out[idx].technology = yktl.z;
+        out[idx].model_a.output = yktl.x;
+        out[idx].model_a.capital = yktl.y;
+        out[idx].model_a.technology = yktl.z;
         out[idx].employed = yktl.w;
       }
     }
@@ -921,9 +943,9 @@
       if (idx >= config.observations) { return; }
 
       if (config.use_fixed_params == 1u) {
-        out[idx].capital_steady_state = capital_steady_state_at(exo, out[idx]);
+        out[idx].model_a.capital_steady_state = capital_steady_state_at(exo, out[idx]);
       } else {
-        out[idx].capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
+        out[idx].model_a.capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
       }
     }
   </script>

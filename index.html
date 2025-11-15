@@ -104,7 +104,12 @@
     </slot>
   </x-navigator>
   <main>
-    <iframe height="600px" width="600px"></iframe>
+    <iframe sandbox="allow-scripts
+                     allow-same-origin
+                     allow-popups
+                     allow-popups-to-escape-sandbox
+                     allow-top-navigation-by-user-activation">
+    </iframe>
   </main>
   <x-config id="config"></x-config>
   <footer>

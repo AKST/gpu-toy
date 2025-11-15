@@ -36,6 +36,11 @@ globalThis.addEventListener('load-example', event => {
   loadApp(event.detail);
 });
 
+globalThis.addEventListener('securitypolicyviolation', event => {
+  console.log('Violation:', event.violatedDirective);
+console.log('Blocked URI:', event.blockedURI);
+});
+
 globalThis.addEventListener('cfg-update', event => {
   const iframe = document.querySelector('iframe');
   iframe.contentWindow.postMessage({
