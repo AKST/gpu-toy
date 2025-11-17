@@ -394,35 +394,17 @@
     const shaderCode = document.getElementById('compute-shader').textContent;
     const shaderModule = device.createShaderModule({ code: shaderCode });
 
-    const step0 = createStep({
+    const step1 = createStep({
       device,
       shaderModule,
       uniforms: [
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: Math.ceil(size / 64),
-      entryPoint: 'step0',
-      entries: [
-        { binding: 10, resource: { buffer: bufferCombinedOutput } },
-        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
-      ],
-    });
-
-    const step1 = createStep({
-      device,
-      shaderModule,
-      uniforms: [
-        { binding: 0, resource: { buffer: bufferUnifExo } },
-        { binding: 1, resource: { buffer: bufferUnifEff } },
-        { binding: 2, resource: { buffer: bufferUnifCfg } },
-      ],
-      workGroups: csv.getSize(inits),
       entryPoint: 'step1',
       entries: [
-        { binding: 0, resource: { buffer: bufferCountryConfig } },
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
         { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
-        { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
       ],
     });
 
@@ -431,10 +413,28 @@
       shaderModule,
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 1, resource: { buffer: bufferUnifEff } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
+      ],
+      workGroups: csv.getSize(inits),
+      entryPoint: 'step2',
+      entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
+        { binding: 10, resource: { buffer: bufferCombinedOutput } },
+        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
+        { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
+      ],
+    });
+
+    const step3 = createStep({
+      device,
+      shaderModule,
+      uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: Math.ceil(size / 64),
-      entryPoint: 'step2',
+      entryPoint: 'step3',
       entries: [
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
         { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
@@ -458,9 +458,9 @@
       try {
         const commandEncoder = device.createCommandEncoder();
         const pass = commandEncoder.beginComputePass();
-        step0.loadIntoPass(pass);
         step1.loadIntoPass(pass);
         step2.loadIntoPass(pass);
+        step3.loadIntoPass(pass);
         pass.end();
 
         const mapping = createMapping(
@@ -958,10 +958,10 @@
     }
 
     /**
-     * Pre-compute employed for all observations
+     * Pre-compute linear outputs
      */
     @compute @workgroup_size(64)
-    fn step0(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
       if (idx >= config.observations) { return; }
 
@@ -973,7 +973,7 @@
      * Computes technology over the different periods
      */
     @compute @workgroup_size(1)
-    fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (global_id.x >= config.countries) { return; }
       let offset: u32 = country_config[global_id.x].idx_offset;
       var last_k_a: f32 = country_config[global_id.x].init_capital;
@@ -1001,7 +1001,7 @@
     }
 
     @compute @workgroup_size(64)
-    fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    fn step3(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
       if (idx >= config.observations) { return; }
 
