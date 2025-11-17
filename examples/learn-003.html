@@ -283,8 +283,9 @@
       document.body.firstChild,
     );
 
-    const INIT_COEFF_PHONE = 0.00000001;
-    const INIT_COEFF_INTERNET = 0.00000001;
+    const INIT_LEGACY = 0.00000001
+    const INIT_COEFF_PHONE = 0.1;
+    const INIT_COEFF_INTERNET = 0.1;
 
     {
       window.addEventListener('message', onMessage);
@@ -314,9 +315,14 @@
           { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
           { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
           { kind: 'number', name: 'depreciation', label: '(d̄) Deprecation Rate', init: 0.07 },
+          { kind: 'divider' },
           { kind: 'title', title: 'Fixed Effects' },
-          { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
-          { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
+          { kind: 'number', name: 'phoneEffect_pc', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_COEFF_PHONE },
+          { kind: 'number', name: 'phoneInternet_pc', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_COEFF_INTERNET },
+          { kind: 'divider' },
+          { kind: 'title', title: 'Fixed Effects (legacy)' },
+          { kind: 'number', name: 'phoneEffect', label: '𝛽 Phone Effect (f(𝛽) = 𝛽𝜑ₜ)', init: INIT_LEGACY },
+          { kind: 'number', name: 'phoneInternet', label: '𝛾 Internet Effect (f(𝛾) = 𝛾𝜓ₜ)', init: INIT_LEGACY },
         ],
       });
     }
@@ -346,8 +352,10 @@
     ]);
 
     const uniformEff = UniformAdapter.create([
-      { type: 'f32', size: 4, init: INIT_COEFF_PHONE, name: 'phoneEffect' },
-      { type: 'f32', size: 4, init: INIT_COEFF_INTERNET, name: 'phoneInternet' },
+      { type: 'f32', size: 4, init: INIT_COEFF_PHONE, name: 'phoneEffect_pc' },
+      { type: 'f32', size: 4, init: INIT_COEFF_INTERNET, name: 'phoneInternet_pc' },
+      { type: 'f32', size: 4, init: INIT_LEGACY, name: 'phoneEffect' },
+      { type: 'f32', size: 4, init: INIT_LEGACY, name: 'phoneInternet' },
     ]);
 
     device.pushErrorScope('validation');
@@ -408,7 +416,7 @@
         { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
-      workGroups: csv.getSize(inits),
+      workGroups: [csv.getSize(inits), 3, 1],
       entryPoint: 'step2',
       entries: [
         { binding: 0, resource: { buffer: bufferCountryConfig } },
@@ -425,9 +433,10 @@
         { binding: 0, resource: { buffer: bufferUnifExo } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
-      workGroups: Math.ceil(size / 64),
+      workGroups: [Math.ceil(size / 64), 3, 1],
       entryPoint: 'step3',
       entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
         { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
       ],
@@ -482,13 +491,17 @@
 
 
         showLog('Employed results:', [...df.employed.slice(0, 10)]);
-        showLog('(B) Output results:', [...df.out_b_output.slice(0, 10)]);
-        showLog('(B) Captial results:', [...df.out_b_capital.slice(0, 10)]);
-        showLog('(B) Technology results:', [...df.out_b_technology.slice(0, 10)]);
-        showLog('(A) Output results:', [...df.out_a_output.slice(0, 10)]);
-        showLog('(A) Captial results:', [...df.out_a_capital.slice(0, 10)]);
-        showLog('(A) Technology results:', [...df.out_a_technology.slice(0, 10)]);
-        showLog('Capital steady state results:', [...df.out_a_capitalSteadyState.slice(0, 10)]);
+        showLog('(C) Output:', [...df.out_c_output.slice(0, 10)]);
+        showLog('(B) Output:', [...df.out_b_output.slice(0, 10)]);
+        showLog('(A) Output:', [...df.out_a_output.slice(0, 10)]);
+        showLog('(B) Technology:', [...df.out_b_technology.slice(0, 10)]);
+        showLog('(A) Technology:', [...df.out_a_technology.slice(0, 10)]);
+        showLog('(C) Captial:', [...df.out_c_capital.slice(0, 10)]);
+        showLog('(B) Captial:', [...df.out_b_capital.slice(0, 10)]);
+        showLog('(A) Captial:', [...df.out_a_capital.slice(0, 10)]);
+        showLog('(C) Capital ss:', [...df.out_c_capitalSteadyState.slice(0, 10)]);
+        showLog('(B) Capital ss:', [...df.out_b_capitalSteadyState.slice(0, 10)]);
+        showLog('(A) Capital ss:', [...df.out_a_capitalSteadyState.slice(0, 10)]);
         console.info(df, groups);
       } catch (e) {
         console.error(e);
@@ -520,6 +533,8 @@
       uniformExo.update('depreciation', data.depreciation);
       uniformEff.update('phoneEffect', data.phoneEffect);
       uniformEff.update('phoneInternet', data.phoneInternet);
+      uniformEff.update('phoneEffect_pc', data.phoneEffect_pc);
+      uniformEff.update('phoneInternet_pc', data.phoneInternet_pc);
       uniformCfg.update('use_fixed_params', data.useFixedParams ? 1 : 0);
       uniformExo.updateBuffer(device, bufferUnifExo);
       uniformEff.updateBuffer(device, bufferUnifEff);
@@ -679,10 +694,7 @@
             ['countryIso', iso => iso === country],
           ]);
 
-          if (index == null) {
-            console.log(country, col);
-            continue;
-          }
+          if (index == null) continue;
           const value = join[col][index];
           const weird = (value == null || Number.isNaN(value) || value == 0);
           if (weird) {
@@ -710,7 +722,6 @@
 
         return true;
       });
-      console.log('c', csv.getSize(joinGroup.frame));
 
 
       joinGroup = csv.sortAndIdentifyGroups('countryIso', 'year', joinGroup.frame);
@@ -798,13 +809,15 @@
     };
 
     struct Effects {
+      phone_fixed_pc: f32,
+      net_exp_pc: f32,
       phone_fixed: f32,
       net_exp: f32,
     };
 
     struct ModelOutput {
       capital: f32,
-      capital_steady_state: f32,
+      capital_ss: f32,
       output: f32,
     }
 
@@ -815,9 +828,9 @@
 
     struct ComputedState {
       employed: f32,
-      model_a: EndogenousTechModelOutput,
-      model_b: EndogenousTechModelOutput,
-      model_c: ModelOutput,
+      ma: EndogenousTechModelOutput,
+      mb: EndogenousTechModelOutput,
+      mc: ModelOutput,
     }
 
     struct CountryConfig {
@@ -907,10 +920,10 @@
      *
      * K(t) = Labour * ((saving*technology)/depreciation)^(1/alpha)
      */
-    fn capital_steady_state_at(p: PrimaryTimeSeries, state: ComputedState) -> f32 {
-      let numer = p.saving * state.model_a.technology;
+    fn capital_steady_state_at(p: PrimaryTimeSeries, employed: f32, technology: f32) -> f32 {
+      let numer = p.saving * technology;
       let denom = p.depreciation;
-      return state.employed * pow(numer/denom, 1.0/p.alpha);
+      return employed * pow(numer/denom, 1.0/p.alpha);
     }
 
     /**
@@ -940,52 +953,89 @@
 
       let country_idx = idx / config.year_per_country;
       let init_tech = country_config[country_idx].init_technology;
+
       let cellphone_eff = effects.phone_fixed * aux.mobile_phone_subscription;
       let internet_eff = effects.net_exp * aux.mobile_phone_internet_connections;
-      let cellphone_eff_pc = cellphone_eff / aux.population;
-      let internet_eff_pc = internet_eff / aux.population;
+      out[idx].ma.technology = init_tech + cellphone_eff + internet_eff;
 
-      out[idx].model_a.technology = init_tech + cellphone_eff + internet_eff;
-      out[idx].model_b.technology = init_tech + cellphone_eff_pc + internet_eff_pc;
+      let cellphone_eff_pc = effects.phone_fixed_pc * (aux.mobile_phone_subscription / aux.population);
+      let internet_eff_pc = effects.net_exp_pc * (aux.mobile_phone_internet_connections / aux.population);
+      out[idx].mb.technology = init_tech + cellphone_eff_pc + internet_eff_pc;
     }
 
     /**
-     * Computes technology over the different periods
+     * Computes output and capital for all models in parallel
      */
-    @compute @workgroup_size(1)
+    @compute @workgroup_size(1, 1, 1)
     fn step2(@builtin(global_invocation_id) global_id: vec3<u32>) {
-      if (global_id.x >= config.countries) { return; }
-      let offset: u32 = country_config[global_id.x].idx_offset;
-      var last_k_a: f32 = country_config[global_id.x].init_capital;
+      let country_idx = global_id.x;
+      let model_idx = global_id.y;
+
+      if (country_idx >= config.countries) { return; }
+      if (model_idx >= 3u) { return; }
+
+      let offset: u32 = country_config[country_idx].idx_offset;
+      var last_k: f32 = country_config[country_idx].init_capital;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
         let l = out[idx].employed;
-        let a = out[idx].model_a.technology;
 
-        var time_series: PrimaryTimeSeries;
-        if (config.use_fixed_params == 1u) {
-          time_series = exo;
+        var a: f32;
+        if (model_idx == 0u) {
+          a = out[idx].ma.technology;
+        } else if (model_idx == 1u) {
+          a = out[idx].mb.technology;
         } else {
-          time_series = primary[idx];
+          a = country_config[country_idx].init_technology;
         }
 
-        let yk = compute_ykt_at(time_series, l, a, last_k_a);
-        last_k_a = yk.y;
-        out[idx].model_a.main.output = yk.x;
-        out[idx].model_a.main.capital = yk.y;
+        var yk: vec2<f32>;
+        if (config.use_fixed_params == 1u) {
+          yk = compute_ykt_at(exo, l, a, last_k);
+        } else {
+          yk = compute_ykt_at(primary[idx], l, a, last_k);
+        }
+
+        last_k = yk.y;
+
+        if (model_idx == 0u) {
+          out[idx].ma.main.output = yk.x;
+          out[idx].ma.main.capital = yk.y;
+        } else if (model_idx == 1u) {
+          out[idx].mb.main.output = yk.x;
+          out[idx].mb.main.capital = yk.y;
+        } else {
+          out[idx].mc.output = yk.x;
+          out[idx].mc.capital = yk.y;
+        }
       }
     }
 
-    @compute @workgroup_size(64)
+    @compute @workgroup_size(64, 1, 1)
     fn step3(@builtin(global_invocation_id) global_id: vec3<u32>) {
       let idx = global_id.x;
+      let mid = global_id.y;
       if (idx >= config.observations) { return; }
+      if (mid >= 3) { return; }
 
+      var time_series: PrimaryTimeSeries;
       if (config.use_fixed_params == 1u) {
-        out[idx].model_a.main.capital_steady_state = capital_steady_state_at(exo, out[idx]);
+        time_series = exo;
       } else {
-        out[idx].model_a.main.capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
+        time_series = primary[idx];
+      }
+
+      let l = out[idx].employed;
+      if (mid == 0u) {
+        let a = out[idx].ma.technology;
+        out[idx].ma.main.capital_ss = capital_steady_state_at(time_series, l, a);
+      } else if (mid == 1u) {
+        let a = out[idx].mb.technology;
+        out[idx].mb.main.capital_ss = capital_steady_state_at(time_series, l, a);
+      } else {
+        let a = country_config[idx / config.year_per_country].init_technology;
+        out[idx].mc.capital_ss = capital_steady_state_at(time_series, l, a);
       }
     }
   </script>

@@ -8,7 +8,16 @@
   grid-template-columns: 1fr;
 }
 
-input + label,
+hr {
+  display: block;
+  width: 100%;
+}
+
+fieldset {
+  border-style: dashed;
+}
+
+:is(input, hr) + :is(label, hr),
 input[type=submit],
 label:has(> input) + label:not(:has(> input)) {
   margin-top: 16px;

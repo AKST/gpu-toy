@@ -38,6 +38,10 @@ function * createConfigRowItems(configRows) {
         }), 'No']);
         break;
       }
+      case 'divider': {
+        yield el('hr', {}, []);
+        break;
+      }
       case 'title': {
         yield el('label', { style: 'font-weight: bold' }, [config.title]);
         break;

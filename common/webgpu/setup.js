@@ -95,7 +95,11 @@ export function createStep({
       if (bindGroupUniform) {
         pass.setBindGroup(1, bindGroupUniform);
       }
-      pass.dispatchWorkgroups(workGroups);
+      if (Array.isArray(workGroups)) {
+        pass.dispatchWorkgroups(...workGroups);
+      } else {
+        pass.dispatchWorkgroups(workGroups);
+      }
     };
   } catch (error) {
     console.error(error);
