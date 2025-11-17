@@ -118,8 +118,30 @@
       </p>
       <h2>Models</h2>
       <ul>
-        <li>Version A, 𝜑ₜ and 𝜓ₜ return number connection</li>
-        <li>Version B, 𝜑ₜ and 𝜓ₜ return (number connection) / population</li>
+        <li>
+          <b>Version A: 𝜑ₜ and 𝜓ₜ return number connection</b>
+          <ul>
+            <li>Every device adds the same a fixed amount to the model</li>
+          </ul>
+          <br>
+        </li>
+        <li>
+          <b>Version B: 𝜑ₜ and 𝜓ₜ return (number connection) / population</b>
+          <ul>
+            <li>
+              The original model actually was supposed to return a number between 0 & 1
+              from <b>𝜑ₜ and 𝜓ₜ</b> to represent the proportion of the population, this
+              is something we forgot to do eariler.
+            </li>
+            <br>
+          </ul>
+        </li>
+        <li>
+          <b>Version C: 𝜑ₜ, 𝜓ₜ = 0</b>
+          <ul>
+            <li>Remove the impact of telecommunication from the model</li>
+          </ul>
+        </li>
       </ul>
       <h2>Data Sources</h2>
     </div>
@@ -223,22 +245,22 @@
           <td>—</td>
         </tr>
         <tr>
-          <td>computed_output</td>
+          <td>out_output_{a,b,c}</td>
           <td>Output (Y) from Cobb-Douglas production function</td>
           <td>—</td>
         </tr>
         <tr>
-          <td>computed_capital</td>
+          <td>out_capital_{a,b,c}</td>
           <td>Capital stock (K) from accumulation equation</td>
           <td>—</td>
         </tr>
         <tr>
-          <td>computed_capitalSteadyState</td>
+          <td>out_capitalSteadyState_{a,b,c}</td>
           <td>Steady-state capital given current technology and labor</td>
           <td>—</td>
         </tr>
         <tr>
-          <td>computed_technology</td>
+          <td>out_technology_{a,b,c}</td>
           <td>Total Factor Productivity (A) with phone/internet effects</td>
           <td>—</td>
         </tr>
@@ -294,11 +316,10 @@
         id: 'download-inital-values',
       });
 
-
       window.parent?.postMessage({
         kind: 'register-knobs',
         knobs: [
-          { kind: 'boolean', name: 'useFixedParams', label: 'Exogenous (𝛼, s, d)', init: false },
+          { kind: 'boolean', name: 'useFixedParams', label: 'Fixed (𝛼, s, d)', init: false },
           { kind: 'title', title: 'Exogenous Variables' },
           { kind: 'number', name: 'alpha', label: '(𝛼) Alpha', init: 2/3 },
           { kind: 'number', name: 'saving', label: '(s̄) Savings Rate', init: 0.4 },
@@ -348,8 +369,8 @@
       inits.technology,
     ], COPY_DST);
 
-    // Combined output buffer: struct has 5 f32s per row (technology, capital, capital_steady_state, output, employed)
-    const combinedOutputData = new Float32Array(new Array(size * 5).fill(0));
+    // Combined output buffer: 13 contiguous fields
+    const combinedOutputData = new Float32Array(new Array(size * 13).fill(0));
     const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
 
     const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
@@ -357,6 +378,7 @@
       df.labourForce,
       df.phoneUsageD,
       df.phoneInternetD,
+      df.population,
     ], COPY_DST);
 
     const bufferPrimaryTimeSeries = initStructArrayBuffer(device, [
@@ -438,14 +460,18 @@
 
         extractStructArrays(combinedOutputData, [
           df.employed,
-          df.out_a_technology,
           df.out_a_capital,
           df.out_a_capitalSteadyState,
           df.out_a_output,
-          df.out_b_technology,
+          df.out_a_technology,
           df.out_b_capital,
           df.out_b_capitalSteadyState,
           df.out_b_output,
+          df.out_b_technology,
+          df.out_c_capital,
+          df.out_c_capitalSteadyState,
+          df.out_c_output,
+          df.out_c_technology,
         ]);
 
 
@@ -698,6 +724,10 @@
       join.out_b_capitalSteadyState = new Float32Array(size);
       join.out_b_capital = new Float32Array(size);
       join.out_b_output = new Float32Array(size);
+      join.out_c_technology = new Float32Array(size);
+      join.out_c_capitalSteadyState = new Float32Array(size);
+      join.out_c_capital = new Float32Array(size);
+      join.out_c_output = new Float32Array(size);
 
       join.phoneUsageD = new Float32Array(size);
       join.phoneInternetD = new Float32Array(size);
@@ -786,16 +816,17 @@
     };
 
     struct ModelOutput {
-      technology: f32,
       capital: f32,
       capital_steady_state: f32,
       output: f32,
+      technology: f32,
     }
 
     struct ComputedState {
       employed: f32,
       model_a: ModelOutput,
       model_b: ModelOutput,
+      model_c: ModelOutput,
     }
 
     struct CountryConfig {
@@ -815,6 +846,7 @@
       labour_force: f32,
       growth_phone_use: f32,
       growth_internet_use: f32,
+      population: f32,
     }
 
     @group(1) @binding(0) var<uniform> exo: PrimaryTimeSeries;
@@ -896,16 +928,16 @@
     fn compute_yktl_at(
       p: PrimaryTimeSeries,
       aux: AuxiliaryTimeSeries,
+      l: f32,
       last_tech: f32,
       last_kaptial: f32,
     ) -> vec4<f32> {
       let a_growth_phone = aux.growth_phone_use * effects.phone_fixed;
       let a_growth_net = aux.growth_internet_use * effects.net_exp;
       let a = a_growth_phone + a_growth_net + last_tech;
-      let l = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
       let k = ralph_newton_capital(p, last_kaptial, a, l);
       let y = a * pow(l, p.alpha) * pow(k, 1 - p.alpha);
-      return vec4(y, k, a, l);
+      return vec4(y, k, a);
     }
 
     /**
@@ -915,25 +947,28 @@
     fn step1(@builtin(global_invocation_id) global_id: vec3<u32>) {
       if (global_id.x >= config.countries) { return; }
       let offset: u32 = country_config[global_id.x].idx_offset;
-      var last_k: f32 = country_config[global_id.x].init_capital;
-      var last_t: f32 = country_config[global_id.x].init_technology;
+      var last_k_a: f32 = country_config[global_id.x].init_capital;
+      var last_t_a: f32 = country_config[global_id.x].init_technology;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
-        var yktl: vec4<f32>;
+        let aux = aux[idx];
+        var yktl: vec3<f32>;
+
+        let l = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
 
         if (config.use_fixed_params == 1u) {
-          yktl = compute_yktl_at(exo, aux[idx], last_t, last_k);
+          yktl = compute_yktl_at(exo, aux, l, last_t_a, last_k_a);
         } else {
-          yktl = compute_yktl_at(primary[idx], aux[idx], last_t, last_k);
+          yktl = compute_yktl_at(primary[idx], aux, l, last_t_a, last_k_a);
         }
 
-        last_k = yktl.y;
-        last_t = yktl.z;
+        last_k_a = yktl.y;
+        last_t_a = yktl.z;
+        out[idx].employed = l;
         out[idx].model_a.output = yktl.x;
         out[idx].model_a.capital = yktl.y;
         out[idx].model_a.technology = yktl.z;
-        out[idx].employed = yktl.w;
       }
     }
 
