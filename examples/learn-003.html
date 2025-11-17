@@ -394,6 +394,20 @@
     const shaderCode = document.getElementById('compute-shader').textContent;
     const shaderModule = device.createShaderModule({ code: shaderCode });
 
+    const step0 = createStep({
+      device,
+      shaderModule,
+      uniforms: [
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
+      ],
+      workGroups: Math.ceil(size / 64),
+      entryPoint: 'step0',
+      entries: [
+        { binding: 10, resource: { buffer: bufferCombinedOutput } },
+        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
+      ],
+    });
+
     const step1 = createStep({
       device,
       shaderModule,
@@ -444,6 +458,7 @@
       try {
         const commandEncoder = device.createCommandEncoder();
         const pass = commandEncoder.beginComputePass();
+        step0.loadIntoPass(pass);
         step1.loadIntoPass(pass);
         step2.loadIntoPass(pass);
         pass.end();
@@ -943,6 +958,18 @@
     }
 
     /**
+     * Pre-compute employed for all observations
+     */
+    @compute @workgroup_size(64)
+    fn step0(@builtin(global_invocation_id) global_id: vec3<u32>) {
+      let idx = global_id.x;
+      if (idx >= config.observations) { return; }
+
+      let aux = aux[idx];
+      out[idx].employed = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
+    }
+
+    /**
      * Computes technology over the different periods
      */
     @compute @workgroup_size(1)
@@ -955,7 +982,7 @@
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
         let aux = aux[idx];
-        let l = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
+        let l = out[idx].employed;
         var time_series: PrimaryTimeSeries;
 
         if (config.use_fixed_params == 1u) {
@@ -967,7 +994,6 @@
         let ykt = compute_ykt_at(time_series, aux, l, last_t_a, last_k_a);
         last_k_a = ykt.y;
         last_t_a = ykt.z;
-        out[idx].employed = l;
         out[idx].model_a.main.output = ykt.x;
         out[idx].model_a.main.capital = ykt.y;
         out[idx].model_a.technology = ykt.z;
