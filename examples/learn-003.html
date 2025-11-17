@@ -156,13 +156,13 @@
       </thead>
       <tbody>
         <tr>
-          <td>phoneInternet</td>
+          <td>mobilePhoneInternetConnections</td>
           <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
           <td>Mobile broadband subscription rate</td>
           <td>Forward-filled missing values</td>
         </tr>
         <tr>
-          <td>phoneUsage</td>
+          <td>mobilePhoneSubscription</td>
           <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
           <td>Mobile phone subscription rate</td>
           <td>Forward-filled missing values</td>
@@ -232,16 +232,6 @@
         <tr>
           <td>employed</td>
           <td>LF × (1 - unemployment/100)</td>
-          <td>—</td>
-        </tr>
-        <tr>
-          <td>difference_in_phoneInternet</td>
-          <td>Period-over-period change in internet usage</td>
-          <td>—</td>
-        </tr>
-        <tr>
-          <td>difference_in_phoneUsage</td>
-          <td>Period-over-period change in phone usage</td>
           <td>—</td>
         </tr>
         <tr>
@@ -376,8 +366,8 @@
     const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
       df.unemployment,
       df.labourForce,
-      df.phoneUsageD,
-      df.phoneInternetD,
+      df.mobilePhoneSubscription,
+      df.mobilePhoneInternetConnections,
       df.population,
     ], COPY_DST);
 
@@ -398,11 +388,13 @@
       device,
       shaderModule,
       uniforms: [
+        { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: Math.ceil(size / 64),
       entryPoint: 'step1',
       entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
         { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
       ],
@@ -550,8 +542,6 @@
               ]),
               {
                 generatedData: 'faked_askAngusWhatThatMeans',
-                phoneUsageD: 'difference_in_phoneUsage',
-                phoneInternetD: 'difference_in_phoneInternet',
               },
             ),
             'model-inputs.csv',
@@ -565,8 +555,6 @@
               ]),
               {
                 generatedData: 'faked_askAngusWhatThatMeans',
-                phoneUsageD: 'difference_in_phoneUsage',
-                phoneInternetD: 'difference_in_phoneInternet',
               },
             ),
             'all-model-data-points.csv',
@@ -624,8 +612,8 @@
       };
 
       const columnsThatNeedCleaning = [
-        'capitalPPP', 'labourForce', 'phoneInternet',
-        'phoneUsage', 'population', 'unemployment', 'ctfp',
+        'capitalPPP', 'labourForce', 'mobilePhoneInternetConnections',
+        'mobilePhoneSubscription', 'population', 'unemployment', 'ctfp',
       ];
       const columnsWeCanFake = [
         'grossSavingsPct',
@@ -742,8 +730,6 @@
       join.out_c_capital = new Float32Array(size);
       join.out_c_output = new Float32Array(size);
 
-      join.phoneUsageD = new Float32Array(size);
-      join.phoneInternetD = new Float32Array(size);
       join.generatedData = new Array(size).fill('');
 
 
@@ -767,18 +753,6 @@
               input[idx] = input[idx-1];
               if (Number.isNaN(input[idx])) debugger;
             }
-          }
-        }
-      }
-
-      for (const [diff, sum] of [
-        [join.phoneUsageD, join.phoneUsage],
-        [join.phoneInternetD, join.phoneInternet],
-      ]) {
-        for (const [groupValue, { offset, count }] of joinGroup.groups.entries()) {
-          diff[offset] = sum[offset];
-          for (let i = 1; i < count; i++) {
-            diff[offset + i] = sum[offset + i] - sum[offset + i - 1];
           }
         }
       }
@@ -861,8 +835,8 @@
     struct AuxiliaryTimeSeries {
       unemployment: f32,
       labour_force: f32,
-      growth_phone_use: f32,
-      growth_internet_use: f32,
+      mobile_phone_subscription: f32,
+      mobile_phone_internet_connections: f32,
       population: f32,
     }
 
@@ -940,21 +914,17 @@
     }
 
     /**
-     * Compute Output, Capital, Technology, Labour at period t.
+     * Compute Output, Capital at period t with pre-computed technology.
      */
     fn compute_ykt_at(
       p: PrimaryTimeSeries,
-      aux: AuxiliaryTimeSeries,
       l: f32,
-      last_tech: f32,
-      last_kaptial: f32,
-    ) -> vec3<f32> {
-      let a_growth_phone = aux.growth_phone_use * effects.phone_fixed;
-      let a_growth_net = aux.growth_internet_use * effects.net_exp;
-      let a = a_growth_phone + a_growth_net + last_tech;
-      let k = ralph_newton_capital(p, last_kaptial, a, l);
+      a: f32,
+      last_capital: f32,
+    ) -> vec2<f32> {
+      let k = ralph_newton_capital(p, last_capital, a, l);
       let y = a * pow(l, p.alpha) * pow(k, 1 - p.alpha);
-      return vec3(y, k, a);
+      return vec2(y, k);
     }
 
     /**
@@ -967,6 +937,16 @@
 
       let aux = aux[idx];
       out[idx].employed = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
+
+      let country_idx = idx / config.year_per_country;
+      let init_tech = country_config[country_idx].init_technology;
+      let cellphone_eff = effects.phone_fixed * aux.mobile_phone_subscription;
+      let internet_eff = effects.net_exp * aux.mobile_phone_internet_connections;
+      let cellphone_eff_pc = cellphone_eff / aux.population;
+      let internet_eff_pc = internet_eff / aux.population;
+
+      out[idx].model_a.technology = init_tech + cellphone_eff + internet_eff;
+      out[idx].model_b.technology = init_tech + cellphone_eff_pc + internet_eff_pc;
     }
 
     /**
@@ -977,26 +957,23 @@
       if (global_id.x >= config.countries) { return; }
       let offset: u32 = country_config[global_id.x].idx_offset;
       var last_k_a: f32 = country_config[global_id.x].init_capital;
-      var last_t_a: f32 = country_config[global_id.x].init_technology;
 
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
-        let aux = aux[idx];
         let l = out[idx].employed;
-        var time_series: PrimaryTimeSeries;
+        let a = out[idx].model_a.technology;
 
+        var time_series: PrimaryTimeSeries;
         if (config.use_fixed_params == 1u) {
           time_series = exo;
         } else {
           time_series = primary[idx];
         }
 
-        let ykt = compute_ykt_at(time_series, aux, l, last_t_a, last_k_a);
-        last_k_a = ykt.y;
-        last_t_a = ykt.z;
-        out[idx].model_a.main.output = ykt.x;
-        out[idx].model_a.main.capital = ykt.y;
-        out[idx].model_a.technology = ykt.z;
+        let yk = compute_ykt_at(time_series, l, a, last_k_a);
+        last_k_a = yk.y;
+        out[idx].model_a.main.output = yk.x;
+        out[idx].model_a.main.capital = yk.y;
       }
     }
 

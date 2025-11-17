@@ -1,7 +1,7 @@
 export const ituCellPhones = {
   url: '../files/mobile-cellular-subscriptions.csv',
   seriesCode: 'i271',
-  dataName: 'phoneUsage',
+  dataName: 'mobilePhoneSubscription',
   headers: [
     { name: 'seriesID', type: 'string', drop: true },
     // need to filter by 'i271'
@@ -23,7 +23,7 @@ export const ituCellPhones = {
 export const ituMobileBoardBandSubcriptions = {
   url: '../files/active-mobile-broadband-subscriptions_1762956324397.csv',
   seriesCode: 'i271mw',
-  dataName: 'phoneInternet',
+  dataName: 'mobilePhoneInternetConnections',
   headers: [
     { name: 'seriesID', type: 'string', drop: true },
     // need to filter by 'i271'
