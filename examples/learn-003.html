@@ -369,8 +369,8 @@
       inits.technology,
     ], COPY_DST);
 
-    // Combined output buffer: 13 contiguous fields
-    const combinedOutputData = new Float32Array(new Array(size * 13).fill(0));
+    // Combined output buffer: 12 contiguous fields
+    const combinedOutputData = new Float32Array(new Array(size * 12).fill(0));
     const bufferCombinedOutput = createBuffer(device, combinedOutputData, COPY_SRC | COPY_DST);
 
     const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
@@ -471,7 +471,6 @@
           df.out_c_capital,
           df.out_c_capitalSteadyState,
           df.out_c_output,
-          df.out_c_technology,
         ]);
 
 
@@ -724,7 +723,6 @@
       join.out_b_capitalSteadyState = new Float32Array(size);
       join.out_b_capital = new Float32Array(size);
       join.out_b_output = new Float32Array(size);
-      join.out_c_technology = new Float32Array(size);
       join.out_c_capitalSteadyState = new Float32Array(size);
       join.out_c_capital = new Float32Array(size);
       join.out_c_output = new Float32Array(size);
@@ -819,13 +817,17 @@
       capital: f32,
       capital_steady_state: f32,
       output: f32,
+    }
+
+    struct EndogenousTechModelOutput {
+      main: ModelOutput,
       technology: f32,
     }
 
     struct ComputedState {
       employed: f32,
-      model_a: ModelOutput,
-      model_b: ModelOutput,
+      model_a: EndogenousTechModelOutput,
+      model_b: EndogenousTechModelOutput,
       model_c: ModelOutput,
     }
 
@@ -925,19 +927,19 @@
     /**
      * Compute Output, Capital, Technology, Labour at period t.
      */
-    fn compute_yktl_at(
+    fn compute_ykt_at(
       p: PrimaryTimeSeries,
       aux: AuxiliaryTimeSeries,
       l: f32,
       last_tech: f32,
       last_kaptial: f32,
-    ) -> vec4<f32> {
+    ) -> vec3<f32> {
       let a_growth_phone = aux.growth_phone_use * effects.phone_fixed;
       let a_growth_net = aux.growth_internet_use * effects.net_exp;
       let a = a_growth_phone + a_growth_net + last_tech;
       let k = ralph_newton_capital(p, last_kaptial, a, l);
       let y = a * pow(l, p.alpha) * pow(k, 1 - p.alpha);
-      return vec4(y, k, a);
+      return vec3(y, k, a);
     }
 
     /**
@@ -953,22 +955,22 @@
       for (var i = 0u; i < config.year_per_country; i++) {
         let idx = offset + i;
         let aux = aux[idx];
-        var yktl: vec3<f32>;
-
         let l = aux.labour_force * (100.0 - aux.unemployment) * (1.0/100.0);
+        var time_series: PrimaryTimeSeries;
 
         if (config.use_fixed_params == 1u) {
-          yktl = compute_yktl_at(exo, aux, l, last_t_a, last_k_a);
+          time_series = exo;
         } else {
-          yktl = compute_yktl_at(primary[idx], aux, l, last_t_a, last_k_a);
+          time_series = primary[idx];
         }
 
-        last_k_a = yktl.y;
-        last_t_a = yktl.z;
+        let ykt = compute_ykt_at(time_series, aux, l, last_t_a, last_k_a);
+        last_k_a = ykt.y;
+        last_t_a = ykt.z;
         out[idx].employed = l;
-        out[idx].model_a.output = yktl.x;
-        out[idx].model_a.capital = yktl.y;
-        out[idx].model_a.technology = yktl.z;
+        out[idx].model_a.main.output = ykt.x;
+        out[idx].model_a.main.capital = ykt.y;
+        out[idx].model_a.technology = ykt.z;
       }
     }
 
@@ -978,9 +980,9 @@
       if (idx >= config.observations) { return; }
 
       if (config.use_fixed_params == 1u) {
-        out[idx].model_a.capital_steady_state = capital_steady_state_at(exo, out[idx]);
+        out[idx].model_a.main.capital_steady_state = capital_steady_state_at(exo, out[idx]);
       } else {
-        out[idx].model_a.capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
+        out[idx].model_a.main.capital_steady_state = capital_steady_state_at(primary[idx], out[idx]);
       }
     }
   </script>
