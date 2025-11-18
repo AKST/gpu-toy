@@ -30,13 +30,21 @@ export class NotebookNavElement extends HTMLElement {
         detail,
         bubbles: true,
       }));
-    });
+    })
 
     this.#root.replaceChildren(
       ...links.map(createStyleSheetLink),
       el('h2', {}, ['Notebooks']),
       ...Array.from(this.querySelectorAll('slot[name=section]'), withSlot),
     );
+  }
+
+  setLayout(layout) {
+    if (layout === 'narrow') {
+      this.style.display = 'none';
+    } else {
+      this.style.display = 'block';
+    }
   }
 }
 

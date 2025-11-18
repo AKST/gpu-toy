@@ -49,23 +49,11 @@
       grid-template-rows: auto 1fr auto;
       grid-template-columns: auto 1fr auto;
     }
-    header {
-      display: grid;
-      grid-template-columns: auto auto;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px var(--color-border) solid;
-    }
-    .header-end {
-      display: grid;
-      grid-gap: 16px;
-      grid-auto-flow: column;
-    }
-    header, footer {
+    footer {
       padding-inline: 32px;
     }
 
-    header, footer { grid-column: 1 / 4; }
+    x-header, footer { grid-column: 1 / 4; }
     nav { grid-column: 1 / 2; }
     main { grid-column: 2 / 3; }
     x-config { grid-column: 3 / 4; }
@@ -77,24 +65,22 @@
       border-top: 1px var(--color-border) solid;
     }
 
+    x-navigator, main, x-config {
+      max-height: 100%;
+      overflow: scroll;
+    }
+
     main {
       display: flex;
       justify-content: center;
       align-items: center;
-      max-height: 100%;
-      overflow: scroll;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>WebGPU Notebook</h1>
-    <div class="header-end">
-      <x-attribution id="attribution"></x-attribution>
-      <x-actions id="actions"></x-actions>
-    </div>
-  </header>
-  <x-navigator>
+  <x-header id="header">
+  </x-header>
+  <x-navigator id="navigation">
     <slot name="section" title="Compute">
       <a href="index.html?example=learn-003">Phones & TFP Growth</a>
     </slot>
@@ -122,6 +108,7 @@
       import("./common/components/x-attribution.js"),
       import("./common/components/x-actions.js"),
       import("./common/components/x-config.js"),
+      import("./common/components/x-header.js"),
       import("./common/components/x-logging.js"),
       import("./common/components/x-navigation.js"),
     ]);

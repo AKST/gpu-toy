@@ -45,13 +45,15 @@
               <mtd columnalign="left">
                 <msub>
                   <mi>A</mi>
-                  <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+                  <mn>0</mn>
                 </msub>
                 <mo>+</mo>
                 <mrow>
                   <mi>𝛽</mi>
                   <mo>·</mo>
-                  <msub><mi>𝜑</mi><mi>t</mi></msub>
+                  <mfrac>
+                    <msub><mi>𝜑</mi><mi>t</mi></msub>
+                  </mfrac>
                 </mrow>
                 <mo>+</mo>
                 <mrow>
@@ -73,13 +75,17 @@
                   <mo>·</mo>
                   <mrow>
                     <mo>(</mo>
-                    <mrow><mn>1</mn><mo>-</mo><mi>d</mi></mrow>
+                    <mrow>
+                      <mn>1</mn>
+                      <mo>-</mo>
+                      <msub><mi>d</mi><mi>t</mi></msub>
+                    </mrow>
                     <mo>)</mo>
                   </mrow>
                 </mrow>
                 <mo>+</mo>
                 <mrow>
-                  <mi>s</mi>
+                  <msub><mi>s</mi><mi>t</mi></msub>
                   <mo>·</mo>
                   <msub><mi>Y</mi><mi>t</mi></msub>
                 </mrow>
@@ -94,18 +100,22 @@
                 <msubsup>
                   <mi>L</mi>
                   <mi>t</mi>
-                  <mi>𝛼</mi>
+                  <msub><mi>𝛼</mi><mi>t</mi></msub>
                 </msubsup>
                 <mo>·</mo>
                 <msubsup>
                   <mi>K</mi>
                   <mi>t</mi>
-                  <mrow><mn>1</mn><mo>-</mo><mi>𝛼</mi></mrow>
+                  <mrow>
+                    <mn>1</mn>
+                    <mo>-</mo>
+                    <msub><mi>𝛼</mi><mi>t</mi></msub>
+                  </mrow>
                 </msubsup>
               </mtd>
             </mtr>
           </mtable>
-          <mover><mo>⏞</mo><mtext>TFP with Fixed effects growth</text></mover>
+          <mover><mo>⏞</mo><mtext>Technology growth as a Linear function</text></mover>
         </mover>
       </math>
       <h2>About</h2>
@@ -119,9 +129,10 @@
       <h2>Models</h2>
       <ul>
         <li>
-          <b>Version A: 𝜑ₜ and 𝜓ₜ return number connection</b>
+          <b>Version A: 𝜑ₜ and 𝜓ₜ return number connection (Legacy)</b>
           <ul>
             <li>Every device adds the same a fixed amount to the model</li>
+            <li>Do not use this, it does not make sense and the results are bad.</li>
           </ul>
           <br>
         </li>
@@ -255,7 +266,7 @@
           <td>—</td>
         </tr>
         <tr>
-          <td>faked_askAngusWhatThatMeans</td>
+          <td>fields_corrected</td>
           <td>Flags which observations had missing data</td>
           <td>Forward-filled from previous period; first period missing = 0</td>
         </tr>
@@ -413,7 +424,6 @@
       shaderModule,
       uniforms: [
         { binding: 0, resource: { buffer: bufferUnifExo } },
-        { binding: 1, resource: { buffer: bufferUnifEff } },
         { binding: 2, resource: { buffer: bufferUnifCfg } },
       ],
       workGroups: [csv.getSize(inits), 3, 1],
@@ -421,7 +431,6 @@
       entries: [
         { binding: 0, resource: { buffer: bufferCountryConfig } },
         { binding: 10, resource: { buffer: bufferCombinedOutput } },
-        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
         { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
       ],
     });
@@ -556,7 +565,7 @@
                 'computed_output',
               ]),
               {
-                generatedData: 'faked_askAngusWhatThatMeans',
+                generatedData: 'fields_corrected',
               },
             ),
             'model-inputs.csv',
@@ -569,7 +578,7 @@
                 'countryId',
               ]),
               {
-                generatedData: 'faked_askAngusWhatThatMeans',
+                generatedData: 'fields_corrected',
               },
             ),
             'all-model-data-points.csv',

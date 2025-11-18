@@ -4,14 +4,24 @@ import { NotebookNavElement } from './common/components/x-navigation.js';
  * @param {URL} url
  */
 export function loadApp({ searchParams }) {
-  const { attr, config, actions, logging } = getChrome();
+  const { header, config, logging } = getChrome();
   const app = searchParams.get('example') ?? 'learn-001.html';
   const iframe = document.querySelector('iframe');
-  attr.flush?.();
+  header.attr?.flush?.();
+  header.actions?.flush?.();
   config.flush?.();
-  actions.flush?.();
   logging.flush?.();
   iframe.src = `./examples/${app}.html`;
+}
+
+export function bootstrapPage({ searchParams }) {
+  /**
+   * @param {URL} url
+   */
+  const { nav } = getChrome();
+  if (searchParams.has('presentation')) {
+    nav.style.opacity = '0';
+  }
 }
 
 const mainResizeObserver = new ResizeObserver(entries => {
@@ -23,12 +33,33 @@ const mainResizeObserver = new ResizeObserver(entries => {
   }
 });
 
+let layout;
+{
+  const [{ width: initWidth }] = document.body.getClientRects();
+  layout = initWidth >= 800 ? 'wide' : 'narrow';
+}
+
+const bodyResizeObserver = new ResizeObserver(entries => {
+  const { config, nav } = getChrome();
+  for (const { contentRect } of entries) {
+    const { width } = contentRect;
+    const nextLayout = width >= 800 ? 'wide' : 'narrow';
+
+    if (layout !== nextLayout) {
+      config.setLayout(nextLayout);
+      nav.setLayout(nextLayout);
+    }
+
+    layout = nextLayout;
+  }
+});
+
 function getChrome() {
-  const attr = document.querySelector('#attribution');
+  const nav = document.querySelector('#navigation');
+  const header = document.querySelector('#header');
   const config = document.querySelector('#config');
-  const actions = document.querySelector('#actions');
   const logging = document.querySelector('#logging');
-  return { attr, config, actions, logging };
+  return { header, config, logging, nav };
 }
 
 globalThis.addEventListener('load-example', event => {
@@ -38,7 +69,7 @@ globalThis.addEventListener('load-example', event => {
 
 globalThis.addEventListener('securitypolicyviolation', event => {
   console.log('Violation:', event.violatedDirective);
-console.log('Blocked URI:', event.blockedURI);
+  console.log('Blocked URI:', event.blockedURI);
 });
 
 globalThis.addEventListener('cfg-update', event => {
@@ -50,16 +81,16 @@ globalThis.addEventListener('cfg-update', event => {
 });
 
 globalThis.addEventListener('message', event => {
-  const { attr, config, actions, logging } = getChrome();
+  const { header, config, logging } = getChrome();
   const message = event.data;
 
   switch (message.kind) {
     case 'attribute':
-      attr.setAttribution?.(message.title, message.link)
+      header.attr.setAttribution?.(message.title, message.link)
       break;
 
     case 'register-button':
-      actions.addButton?.(message.label, message.id);
+      header.actions.addButton?.(message.label, message.id);
       break;
 
     case 'register-knobs':
@@ -76,5 +107,9 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-loadApp(new URL(globalThis.location+''));
+const pageUrl = new URL(globalThis.location+'');
+
+loadApp(pageUrl);
+bootstrapPage(pageUrl);
 mainResizeObserver.observe(document.querySelector('main'));
+bodyResizeObserver.observe(document.body);

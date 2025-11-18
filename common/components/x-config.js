@@ -100,6 +100,14 @@ export class ConfigSideBarElement extends HTMLElement {
     this.#setFieldsetDisplay('none');
   }
 
+  setLayout(layout) {
+    if (layout === 'narrow') {
+      this.style.display = 'none';
+    } else {
+      this.style.display = 'block';
+    }
+  }
+
   #setFieldsetDisplay(display) {
     const fieldset = this.#root.querySelector('fieldset');
     fieldset.style.display = display;

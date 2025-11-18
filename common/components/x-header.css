@@ -1,0 +1,15 @@
+
+:host {
+  padding-inline: 32px;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px var(--color-border) solid;
+}
+
+.header-end {
+  display: grid;
+  grid-gap: 16px;
+  grid-auto-flow: column;
+}
