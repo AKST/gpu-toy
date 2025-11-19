@@ -107,7 +107,7 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-const pageUrl = getPageURL(false);
+const pageUrl = getPageURL(true);
 loadApp(pageUrl);
 bootstrapPage(pageUrl);
 mainResizeObserver.observe(document.querySelector('main'));
