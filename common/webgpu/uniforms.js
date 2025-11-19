@@ -3,6 +3,8 @@
  */
 
 export class UniformAdapter {
+  #_internalBuffer = undefined;
+
   /**
    * @param {Omit<UniformDef, 'init'>[]} uniforms
    * @param {Record<string, number>} state
@@ -50,7 +52,7 @@ export class UniformAdapter {
    * @param {GPUDevice} device
    * @param {GPUBuffer} buffer
    */
-  updateBuffer(device, buffer) {
+  updateBuffer(device) {
     const arrayBuffer = new ArrayBuffer(this.bufferSize);
     const dataAsFloat = new Float32Array(arrayBuffer);
     const dataAsUint = new Uint32Array(arrayBuffer);
@@ -72,7 +74,7 @@ export class UniformAdapter {
       offset += uniform.size;
     }
 
-    device.queue.writeBuffer(buffer, 0, arrayBuffer);
+    device.queue.writeBuffer(this.#_internalBuffer, 0, arrayBuffer);
   }
 
   /**
@@ -80,11 +82,11 @@ export class UniformAdapter {
    * @return {GPUBuffer}
    */
   createBuffer(device) {
-    const buffer = device.createBuffer({
+    this.#_internalBuffer = device.createBuffer({
       size: this.bufferSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-    this.updateBuffer(device, buffer);
-    return buffer;
+    this.updateBuffer(device);
+    return this.#_internalBuffer;
   }
 }

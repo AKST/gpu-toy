@@ -1,4 +1,4 @@
-import { NotebookNavElement } from './common/components/x-navigation.js';
+import { getPageURL } from './common/routing.js';
 
 /**
  * @param {URL} url
@@ -107,8 +107,7 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-const pageUrl = new URL(globalThis.location+'');
-
+const pageUrl = getPageURL(false);
 loadApp(pageUrl);
 bootstrapPage(pageUrl);
 mainResizeObserver.observe(document.querySelector('main'));

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base target="_blank">
+    <meta charset="UTF-8">
+  </head>
+  <body>
+    <template id="model-syntax">
+      <div class="text-container">
+        <h1>TFP growth via Phones & Internet</h1>
+        <math display="block">
+          <mover>
+            <mtable>
+              <mtr>
+                <mtd columnalign="right"><msub><mi>A</mi><mi>t</mi></msub></mtd>
+                <mtd><mo>=</mo></mtd>
+                <mtd columnalign="left">
+                  <msub>
+                    <mi>A</mi>
+                    <mn>0</mn>
+                  </msub>
+                  <mo>+</mo>
+                  <mrow>
+                    <mi>𝛽</mi>
+                    <mo>·</mo>
+                    <mfrac>
+                      <msub><mi>𝜑</mi><mi>t</mi></msub>
+                    </mfrac>
+                  </mrow>
+                  <mo>+</mo>
+                  <mrow>
+                    <mi>𝛾</mi>
+                    <mo>·</mo>
+                    <msub><mi>𝜓</mi><mi>t</mi></msub>
+                  </mrow>
+                </mtd>
+              </mtr>
+              <mtr>
+                <mtd columnalign="right"><msub><mi>K</mi><mi>t</mi></msub></mtd>
+                <mtd><mo>=</mo></mtd>
+                <mtd columnalign="left">
+                  <mrow>
+                    <msub>
+                      <mi>K</mi>
+                      <mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow>
+                    </msub>
+                    <mo>·</mo>
+                    <mrow>
+                      <mo>(</mo>
+                      <mrow>
+                        <mn>1</mn>
+                        <mo>-</mo>
+                        <msub><mi>d</mi><mi>t</mi></msub>
+                      </mrow>
+                      <mo>)</mo>
+                    </mrow>
+                  </mrow>
+                  <mo>+</mo>
+                  <mrow>
+                    <msub><mi>s</mi><mi>t</mi></msub>
+                    <mo>·</mo>
+                    <msub><mi>Y</mi><mi>t</mi></msub>
+                  </mrow>
+                </mtd>
+              </mtr>
+              <mtr>
+                <mtd columnalign="right"><msub><mi>Y</mi><mi>t</mi></msub></mtd>
+                <mtd><mo>=</mo></mtd>
+                <mtd columnalign="left">
+                  <msub><mi>A</mi><mi>t</mi></msub>
+                  <mo>·</mo>
+                  <msubsup>
+                    <mi>L</mi>
+                    <mi>t</mi>
+                    <msub><mi>𝛼</mi><mi>t</mi></msub>
+                  </msubsup>
+                  <mo>·</mo>
+                  <msubsup>
+                    <mi>K</mi>
+                    <mi>t</mi>
+                    <mrow>
+                      <mn>1</mn>
+                      <mo>-</mo>
+                      <msub><mi>𝛼</mi><mi>t</mi></msub>
+                    </mrow>
+                  </msubsup>
+                </mtd>
+              </mtr>
+            </mtable>
+            <mover><mo>⏞</mo><mtext>Technology growth as a Linear function</text></mover>
+          </mover>
+        </math>
+        <h2>About</h2>
+        <p>
+          This model <s>assumes all countries have TFP of 1000 at the start
+          (almost certianly incorrect), and this might be to explain for
+          the dramatically incorrect results for capital and output</s>,
+          may produce weird results when countries are missing enough
+          data points for inputs.
+        </p>
+        <h2>Models</h2>
+        <ul>
+          <li>
+            <b>Version A: 𝜑ₜ and 𝜓ₜ return number connection (Legacy)</b>
+            <ul>
+              <li>Every device adds the same a fixed amount to the model</li>
+              <li>Do not use this, it does not make sense and the results are bad.</li>
+            </ul>
+            <br>
+          </li>
+          <li>
+            <b>Version B: 𝜑ₜ and 𝜓ₜ return (number connection) / population</b>
+            <ul>
+              <li>
+                The original model actually was supposed to return a number between 0 & 1
+                from <b>𝜑ₜ and 𝜓ₜ</b> to represent the proportion of the population, this
+                is something we forgot to do eariler.
+              </li>
+              <br>
+            </ul>
+          </li>
+          <li>
+            <b>Version C: 𝜑ₜ, 𝜓ₜ = 0</b>
+            <ul>
+              <li>Remove the impact of telecommunication from the model</li>
+            </ul>
+          </li>
+        </ul>
+        <h2>Data Sources</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Source</th>
+            <th>About</th>
+            <th>Data Cleaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>mobilePhoneInternetConnections</td>
+            <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
+            <td>Mobile broadband subscription rate</td>
+            <td>Forward-filled missing values</td>
+          </tr>
+          <tr>
+            <td>mobilePhoneSubscription</td>
+            <td><a target="_blank" href="https://datahub.itu.int/dashboards/">ITU</a></td>
+            <td>Mobile phone subscription rate</td>
+            <td>Forward-filled missing values</td>
+          </tr>
+          <tr>
+            <td>capitalPPP</td>
+            <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+            <td>Capital stock (PPP adjusted)</td>
+            <td>1999 value used for initial capital at start of 2000</td>
+          </tr>
+          <tr>
+            <td>ctfp</td>
+            <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+            <td>Total Factor Productivity</td>
+            <td>1999 value used; missing values filled with 1999 average (0.636244538850831)</td>
+          </tr>
+          <tr>
+            <td>labourForce</td>
+            <td><a target="_blank" href="https://data.worldbank.org/indicator/SL.TLF.TOTL.IN">World Bank</a></td>
+            <td>Total labor force</td>
+            <td>Forward-filled missing values</td>
+          </tr>
+          <tr>
+            <td>population</td>
+            <td><a target="_blank" href="https://data.worldbank.org/indicator/SP.POP.TOTL">World Bank</a></td>
+            <td>Total population</td>
+            <td>Forward-filled missing values</td>
+          </tr>
+          <tr>
+            <td>unemployment</td>
+            <td><a target="_blank" href="https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS">World Bank</a></td>
+            <td>Unemployment rate (%)</td>
+            <td>Forward-filled missing values</td>
+          </tr>
+          <tr>
+            <td>laboursShare</td>
+            <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+            <td>Labor's share of income (α)</td>
+            <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+          </tr>
+          <tr>
+            <td>grossSavingsPct</td>
+            <td><a target="_blank" href="https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS">World Bank</a></td>
+            <td>Gross savings as % of GDP</td>
+            <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+          </tr>
+          <tr>
+            <td>avgDepreciation</td>
+            <td><a target="_blank" href="https://pwt-data-tool.streamlit.app">Penn World Table</a></td>
+            <td>Average depreciation rate (δ)</td>
+            <td>Forward-filled missing values; 2000 values filled with average when missing</td>
+          </tr>
+        </tbody>
+        <caption>
+          <p>Input Variables</p>
+        </caption>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>About</th>
+            <th>Data Cleaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>employed</td>
+            <td>LF × (1 - unemployment/100)</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>out_output_{a,b,c}</td>
+            <td>Output (Y) from Cobb-Douglas production function</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>out_capital_{a,b,c}</td>
+            <td>Capital stock (K) from accumulation equation</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>out_capitalSteadyState_{a,b,c}</td>
+            <td>Steady-state capital given current technology and labor</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>out_technology_{a,b,c}</td>
+            <td>Total Factor Productivity (A) with phone/internet effects</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>fields_corrected</td>
+            <td>Flags which observations had missing data</td>
+            <td>Forward-filled from previous period; first period missing = 0</td>
+          </tr>
+        </tbody>
+        <caption>
+          <p>Output Variables</p>
+        </caption>
+      </table>
+    </template>
+  </body>
+</html>
+

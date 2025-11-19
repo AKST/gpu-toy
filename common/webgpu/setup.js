@@ -1,12 +1,3 @@
-export function createBuffer(device, data, flag) {
-  const buffer = device.createBuffer({
-    size: data.length * data.constructor.BYTES_PER_ELEMENT,
-    usage: GPUBufferUsage.STORAGE | flag,
-  });
-  device.queue.writeBuffer(buffer, 0, data);
-  return buffer;
-}
-
 export function initStructArrayBuffer(device, arrays, flag) {
   const length = arrays[0].length
   let size = arrays[0].constructor.BYTES_PER_ELEMENT;

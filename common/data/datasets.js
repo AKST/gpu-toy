@@ -1,5 +1,5 @@
 export const ituCellPhones = {
-  url: '../files/mobile-cellular-subscriptions.csv',
+  url: import.meta.resolve('../../files/mobile-cellular-subscriptions.csv'),
   seriesCode: 'i271',
   dataName: 'mobilePhoneSubscription',
   headers: [
@@ -21,7 +21,7 @@ export const ituCellPhones = {
 };
 
 export const ituMobileBoardBandSubcriptions = {
-  url: '../files/active-mobile-broadband-subscriptions_1762956324397.csv',
+  url: import.meta.resolve('../../files/active-mobile-broadband-subscriptions_1762956324397.csv'),
   seriesCode: 'i271mw',
   dataName: 'mobilePhoneInternetConnections',
   headers: [
@@ -60,7 +60,7 @@ const wbColumns = [
 export const wbPopulation = {
   // in thousands
   source: 'https://data.worldbank.org/indicator/SP.POP.TOTL',
-  url: '../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv',
+  url: import.meta.resolve('../../files/API_SP.POP.TOTL_DS2_en_csv_v2_130083.csv'),
   dropRows: 4,
   headers: {
     load: wbColumns,
@@ -74,7 +74,7 @@ export const wbPopulation = {
 export const wbLabourForce = {
   // data sourced in 1000's
   source: 'https://data.worldbank.org/indicator/SL.TLF.TOTL.IN',
-  url: '../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv',
+  url: import.meta.resolve('../../files/API_SL.TLF.TOTL.IN_DS2_en_csv_v2_127995.csv'),
   dropRows: 4,
   headers: {
     load: wbColumns,
@@ -87,7 +87,7 @@ export const wbLabourForce = {
 
 export const wbUnemployment = {
   source: 'https://data.worldbank.org/indicator/SL.UEM.TOTL.ZS',
-  url: '../files/API_SL.UEM.TOTL.ZS_DS2_en_csv_v2_130165.csv',
+  url: import.meta.resolve('../../files/API_SL.UEM.TOTL.ZS_DS2_en_csv_v2_130165.csv'),
   dropRows: 4,
   headers: {
     load: wbColumns,
@@ -100,8 +100,8 @@ export const wbUnemployment = {
 
 export const wbSavingsRateOfGDP = {
   avg2000: 25,
-  source: 'https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS',
-  url: '../files/API_NY.GNS.ICTR.ZS_DS2_en_csv_v2_156757.csv',
+  source: import.meta.resolve('https://data.worldbank.org/indicator/NY.GNS.ICTR.ZS'),
+  url: import.meta.resolve('../../files/API_NY.GNS.ICTR.ZS_DS2_en_csv_v2_156757.csv'),
   dropRows: 4,
   headers: {
     load: wbColumns,
@@ -114,7 +114,7 @@ export const wbSavingsRateOfGDP = {
 
 export const pwtCapitalStock = {
   source: 'https://pwt-data-tool.streamlit.app/?page=Thematic+select',
-  url: '../files/2025-11-12T08-48_export.csv',
+  url: import.meta.resolve('../../files/2025-11-12T08-48_export.csv'),
   headers: {
     load: [
       { type: 'string', name: 'ISO code', rename: 'countryIso' },
@@ -133,7 +133,7 @@ export const pwtCapitalStock = {
 export const pwtTfpStock = {
   avg1999: 0.636244538850831,
   source: 'https://www.rug.nl/ggdc/productivity/pwt/',
-  url: '../files/2025-11-15T05-12_export.csv',
+  url: import.meta.resolve('../../files/2025-11-15T05-12_export.csv'),
   headers: {
     load: [
       { type: 'string', name: 'ISO code', rename: 'countryIso' },
@@ -152,7 +152,7 @@ export const pwtTfpStock = {
 export const pwtAvgDepreciation = {
   avg2000: 0.043634836264368,
   source: 'https://www.rug.nl/ggdc/productivity/pwt/',
-  url: '../files/2025-11-15T08-50_export.csv',
+  url: import.meta.resolve('../../files/2025-11-15T08-50_export.csv'),
   headers: {
     load: [
       { type: 'string', name: 'ISO code', rename: 'countryIso' },
@@ -171,7 +171,7 @@ export const pwtAvgDepreciation = {
 export const pwtLabourShare = {
   avg2000: 0.043634836264368,
   source: 'https://www.rug.nl/ggdc/productivity/pwt/',
-  url: '../files/2025-11-15T09-02_export.csv',
+  url: import.meta.resolve('../../files/2025-11-15T09-02_export.csv'),
   headers: {
     load: [
       { type: 'string', name: 'ISO code', rename: 'countryIso' },

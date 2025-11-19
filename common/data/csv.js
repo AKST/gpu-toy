@@ -72,7 +72,7 @@ export function processCsv(text, { headers, dropRows = 0 }) {
 
     const colIndex = csvHeaders.indexOf(header.name);
     if (colIndex === -1) {
-      console.warn(`Column ${header.name} not found in CSV`);
+      // console.warn(`Column ${header.name} not found in CSV`);
       continue
     }
 
