@@ -84,6 +84,7 @@
   <x-navigator id="navigation">
     <slot name="section" title="Compute">
       <a href="index.html?example=compute/econ2102/index">Phones & TFP Growth</a>
+      <a href="index.html?example=compute/attempt-ols/index">Compute OLS</a>
     </slot>
     <slot name="section" title="Learning">
       <a href="index.html?example=learn-001">Basic Triangle</a>
@@ -105,14 +106,17 @@
     <p>Created by <a href="https://www.akst.io/" target="_blank">Angus Thomsen</a></p>
   </footer>
   <script type="module">
-    await Promise.all([
+    Promise.all([
       import("./common/components/x-attribution.js"),
       import("./common/components/x-actions.js"),
       import("./common/components/x-config.js"),
       import("./common/components/x-header.js"),
       import("./common/components/x-logging.js"),
       import("./common/components/x-navigation.js"),
-    ]);
+    ]).then(
+      () => console.info('web components loaded'),
+      () => console.info('web components fail to load'),
+    );
   </script>
   <script type="module" src="./index.js"></script>
 </body>

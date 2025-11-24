@@ -18,7 +18,7 @@ export function getPageURL(redirectApp) {
   if (redirectApp) {
     pageUrl.searchParams.set(
       'example',
-      redirect(pageUrl.searchParams.get('example')),
+      redirect(pageUrl.searchParams.get('example') ?? 'learn-001'),
     );
   }
   return pageUrl;

@@ -1,10 +1,17 @@
+
+/**
+ * @param {GPUDevice} device
+ * @param {(Uint32Array | Float32Array)[]} arrays
+ * @param {number} flag
+ */
 export function initStructArrayBuffer(device, arrays, flag) {
+  const BYTES_PER_ELEMENT = 4;
   const length = arrays[0].length
-  let size = arrays[0].constructor.BYTES_PER_ELEMENT;
+  let size = BYTES_PER_ELEMENT;
 
   for (let i = 1; i < arrays.length; i++) {
     if (length !== arrays[i].length) throw new Error();
-    size += arrays[i].constructor.BYTES_PER_ELEMENT
+    size += BYTES_PER_ELEMENT
     if (arrays[i] instanceof Float32Array) continue;
     if (arrays[i] instanceof Uint32Array) continue;
   }

@@ -5,7 +5,7 @@ import { getPageURL } from './common/routing.js';
  */
 export function loadApp({ searchParams }) {
   const { header, config, logging } = getChrome();
-  const app = searchParams.get('example') ?? 'learn-001.html';
+  const app = searchParams.get('example');
   const iframe = document.querySelector('iframe');
   header.attr?.flush?.();
   header.actions?.flush?.();
@@ -107,7 +107,7 @@ globalThis.addEventListener('message', event => {
   }
 });
 
-const pageUrl = getPageURL(true);
+const pageUrl = getPageURL(true, 'learn-001');
 loadApp(pageUrl);
 bootstrapPage(pageUrl);
 mainResizeObserver.observe(document.querySelector('main'));

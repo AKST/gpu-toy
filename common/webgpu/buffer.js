@@ -43,5 +43,4 @@ export class OutputBufferAdapter {
 
     return { read, stagingBuffer };
   }
-
 }
