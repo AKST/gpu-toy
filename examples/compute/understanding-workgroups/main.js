@@ -66,12 +66,60 @@ function * bufferRows(buffer, stride, layout, rows) {
 }
 
 export async function main() {
-  try {
-    const config = new Config([4, 3, 2], [4, 3, 2]);
-    const device = await getGPU();
+  window.parent?.postMessage({
+    kind: 'register-knobs',
+    knobs: [
+      { kind: 'title', title: 'Work Groups' },
+      { kind: 'number', name: 'wgX', label: 'x', init: 4 },
+      { kind: 'number', name: 'wgY', label: 'y', init: 3 },
+      { kind: 'number', name: 'wgZ', label: 'z', init: 2 },
+      { kind: 'title', title: '"Sub" Groups' },
+      { kind: 'number', name: 'sgX', label: 'x', init: 4 },
+      { kind: 'number', name: 'sgY', label: 'y', init: 3 },
+      { kind: 'number', name: 'sgZ', label: 'z', init: 2 },
+    ],
+  });
 
+  const config = new Config([4, 3, 2], [4, 3, 2]);
+  const { table, shaderCode } = await compute(config);
+  await render(table, shaderCode);
+
+  window.addEventListener('message', async ({ data: message }) => {
+    console.log(message);
+
+    if (message.kind === 'update-knobs') {
+      const { wgX, wgY, wgZ, sgX, sgY, sgZ } = message.data;
+      const config = new Config([wgX, wgY, wgZ], [sgX, sgY, sgZ]);
+      const { table, shaderCode } = await compute(config);
+      await render(table, shaderCode);
+    }
+  });
+}
+
+export async function render(table, shaderCode) {
+  const parser = new DOMParser();
+  const response = await fetch('./layout.html');
+  const html = await response.text();
+  const doc = parser.parseFromString(html, 'text/html');
+  const template = doc.querySelector('#layout');
+  document.body.replaceChildren(template.content.cloneNode(true));
+  const pre = document.createElement('pre');
+  pre.appendChild(document.createTextNode(shaderCode));
+  document.querySelector('.code-slot').replaceWith(pre);
+  document.querySelector('.table-slot').replaceWith(table);
+}
+
+export async function compute(config) {
+  try {
+    const device = await getGPU();
     device.pushErrorScope('validation');
-    const { uniform, output, pipeline, bindGroup } = await createPipeline(device, config);
+
+    const {
+      uniform, output,
+      pipeline, bindGroup,
+      code: shaderCode,
+    } = await createPipeline(device, config);
+
     const commandEncoder = device.createCommandEncoder();
     const pass = commandEncoder.beginComputePass();
     const { subgroups: sg } = config;
@@ -80,67 +128,6 @@ export async function main() {
     pass.dispatchWorkgroups(sg.x, sg.y, sg.z);
     pass.end();
 
-    const mapping = output.createMapping(device, commandEncoder);
-    device.queue.submit([commandEncoder.finish()]);
-    await mapping.read();
-
-    const outputStride = 4 * 4 * 3;
-    const results = Array.from(bufferRows(output.cpuBuffer.buffer, outputStride, [
-      { type: 'vec3<u32>', name: 'global' },
-      { type: 'vec3<u32>', name: 'local' },
-      { type: 'vec3<u32>', name: 'workgroup' },
-    ], config.rows()));
-
-    const topHeaders = [
-      { colSpan: 1, label: '' },
-      { colSpan: 3, label: 'Global' },
-      { colSpan: 3, label: 'Local' },
-      { colSpan: 3, label: 'WorkGroup' },
-    ];
-
-    const colHeaders = [
-      { colSpan: 1, label: 'ID' },
-      { colSpan: 1, label: 'x', read: ['global', 0] },
-      { colSpan: 1, label: 'y', read: ['global', 1] },
-      { colSpan: 1, label: 'z', read: ['global', 2] },
-      { colSpan: 1, label: 'x', read: ['local', 0] },
-      { colSpan: 1, label: 'y', read: ['local', 1] },
-      { colSpan: 1, label: 'z', read: ['local', 2] },
-      { colSpan: 1, label: 'x', read: ['workgroup', 0] },
-      { colSpan: 1, label: 'y', read: ['workgroup', 1] },
-      { colSpan: 1, label: 'z', read: ['workgroup', 2] },
-    ];
-
-    const table = document.createElement('table');
-    for (const group of [topHeaders, colHeaders]) {
-      const tr = document.createElement('tr');
-      for (const header of group) {
-        const th = document.createElement('th');
-        th.colSpan = header.colSpan;
-        th.appendChild(document.createTextNode(header.label));
-        tr.appendChild(th);
-      }
-      table.appendChild(tr);
-    }
-
-    let id = 0;
-    for (const row of results) {
-      const tr = document.createElement('tr');
-      const tdId = document.createElement('td');
-      tdId.appendChild(document.createTextNode(id++));
-      tr.appendChild(tdId);
-
-      for (const column of colHeaders.slice(1)) {
-        const [prop, index] = column.read;
-        const td = document.createElement('td');
-        const text = document.createTextNode(row[prop][index]);
-        td.appendChild(text);
-        tr.appendChild(td);
-      }
-      table.appendChild(tr);
-    }
-    document.body.appendChild(table);
-
     const errorScope = await device.popErrorScope();
     if (errorScope) {
       console.error('GPU:',errorScope.message);
@@ -148,6 +135,12 @@ export async function main() {
     } else {
       console.log('GPU: now running');
     }
+
+    const results = await readOutput(device, config, commandEncoder, output);
+    const table = showOutputTable(results);
+    uniform.getBuffer(device).destroy();
+    output.gpuBuffer.destroy();
+    return { table, shaderCode }
   } catch (e) {
     console.error(e);
   }
@@ -185,7 +178,72 @@ async function createPipeline(device, config) {
     ],
   });
 
-  return { uniform, output, pipeline, bindGroup };
+  return { code, uniform, output, pipeline, bindGroup };
+}
+
+async function readOutput(device, config, commandEncoder, output) {
+  const mapping = output.createMapping(device, commandEncoder);
+  device.queue.submit([commandEncoder.finish()]);
+  await mapping.read();
+
+  const outputStride = 4 * 4 * 3;
+  return Array.from(bufferRows(output.cpuBuffer.buffer, outputStride, [
+    { type: 'vec3<u32>', name: 'global' },
+    { type: 'vec3<u32>', name: 'local' },
+    { type: 'vec3<u32>', name: 'workgroup' },
+  ], config.rows()));
+}
+
+function showOutputTable(results) {
+  const topHeaders = [
+    { colSpan: 1, label: '' },
+    { colSpan: 3, label: 'Global' },
+    { colSpan: 3, label: 'Local' },
+    { colSpan: 3, label: 'WorkGroup' },
+  ];
+
+  const colHeaders = [
+    { colSpan: 1, label: 'ID' },
+    { colSpan: 1, label: 'x', read: ['global', 0] },
+    { colSpan: 1, label: 'y', read: ['global', 1] },
+    { colSpan: 1, label: 'z', read: ['global', 2] },
+    { colSpan: 1, label: 'x', read: ['local', 0] },
+    { colSpan: 1, label: 'y', read: ['local', 1] },
+    { colSpan: 1, label: 'z', read: ['local', 2] },
+    { colSpan: 1, label: 'x', read: ['workgroup', 0] },
+    { colSpan: 1, label: 'y', read: ['workgroup', 1] },
+    { colSpan: 1, label: 'z', read: ['workgroup', 2] },
+  ];
+
+  const table = document.createElement('table');
+  for (const group of [topHeaders, colHeaders]) {
+    const tr = document.createElement('tr');
+    for (const header of group) {
+      const th = document.createElement('th');
+      th.colSpan = header.colSpan;
+      th.appendChild(document.createTextNode(header.label));
+      tr.appendChild(th);
+    }
+    table.appendChild(tr);
+  }
+
+  let id = 0;
+  for (const row of results) {
+    const tr = document.createElement('tr');
+    const tdId = document.createElement('td');
+    tdId.appendChild(document.createTextNode(id++));
+    tr.appendChild(tdId);
+
+    for (const column of colHeaders.slice(1)) {
+      const [prop, index] = column.read;
+      const td = document.createElement('td');
+      const text = document.createTextNode(row[prop][index]);
+      td.appendChild(text);
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+  return table;
 }
 
 async function getGPU() {

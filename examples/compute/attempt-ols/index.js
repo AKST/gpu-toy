@@ -1,5 +1,5 @@
 import * as csv from '@common/data/csv.js';
-import * as buffer from './buffer.js';
+import * as buffer from '@common/webgpu/buffer.js';
 
 const COMPUTE_SHADER_URL = import.meta.resolve('./compute.wgsl');
 const HOUSING_DATA = import.meta.resolve('@data/ols-data/BostonHousing.csv');
@@ -8,6 +8,7 @@ export async function main() {
   try {
     const [device, [data, buffer]] = await Promise.all([getGPU(), loadData()]);
     const pipeline = await createPipeline(device, buffer);
+    console.log(csv.getSize(data));
     console.log(data);
   } catch (e) {
     console.error(e);

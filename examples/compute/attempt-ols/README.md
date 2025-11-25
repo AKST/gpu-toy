@@ -30,7 +30,7 @@ struct Reduce { stride_w: u32 }
 @binding(1) var<storage, read>: data_in: array<f32, n * k>;
 @binding(2) var<storage, read_write> data_map: array<array<array<f32, n/2>, k>, k>;
 
-@compute @workgroup(k, k, ?)
+@compute @workgroup_size(k, k, ?)
 fn mul_apply(@builtin(global_invocation_id) gid: vec3<u32>) {
   // conditional
   let a = data_in[k*(gid.z * 2 + 0) + gid.x];
@@ -77,7 +77,7 @@ struct Config { n: u32, k: u32 }
 @group(0) @binding(1) var<storage, read> self: array<f32>; // size n*k
 @group(0) @binding(2) var<storage, read_write> selfT_self: array<f32>; // size k^2
 
-@compute @workgroup(w, sg, sg)
+@compute @workgroup_size(w, sg, sg)
 fn multiply_selfT_self(@builtin(global_invocation_id) gid: vec3<u32>) {
   // condition
   let mul = self[??] * self[??];
