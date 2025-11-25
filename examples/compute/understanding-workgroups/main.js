@@ -4,6 +4,7 @@ import {
   readStructuredData,
 } from '@common/webgpu/buffer.js';
 
+const OUTPUT_STRIDE = 1*(3*4) + 3*(4 * 4);
 const COMPUTE_SHADER_URL = import.meta.resolve('./shader.wgsl');
 const WORKGROUP_REGEX =
   /@workgroup_size\s*\(\s*\d+\s*(?:,\s*\d+\s*(?:,\s*\d+\s*)?)?\)/;
@@ -53,13 +54,23 @@ class Config {
     const { workgroups: wg, subgroups: sg } = this;
     return { x: wg.x * sg.x, y: wg.y * sg.y, z: wg.z * sg.z }
   }
+
+  toString() {
+    return `Config(workgroups=${
+      JSON.stringify(this.workgroups).replace(/\"/g, '')
+    }, subgroups=${
+      JSON.stringify(this.subgroups).replace(/\"/g, '')
+    }, size=${
+      this.rows()
+    })`;
+  }
 }
 
 function * bufferRows(buffer, stride, layout, rows) {
+  let readFrom = 0;
   for (let i = 0; i < rows; i++) {
     const row = {};
-    const readFrom = i * stride;
-    readStructuredData({
+    readFrom = readStructuredData({
       arrayBuffer: buffer,
       layout,
       data: { kind: 'rows', rows: [row] },
@@ -88,7 +99,7 @@ export async function main() {
   const config = new Config([4, 3, 2], [4, 3, 2]);
   const { table, shaderCode } = await compute(config);
   showLog("Compute Finished");
-  await render(table, shaderCode);
+  await render(table, preElements(shaderCode, config));
 
   window.addEventListener('message', async ({ data: message }) => {
     console.log(message);
@@ -97,12 +108,12 @@ export async function main() {
       const { wgX, wgY, wgZ, sgX, sgY, sgZ } = message.data;
       const config = new Config([wgX, wgY, wgZ], [sgX, sgY, sgZ]);
       const { table, shaderCode } = await compute(config);
-      await render(table, shaderCode);
+      await render(table, preElements(shaderCode, config));
     }
   });
 }
 
-export async function render(table, shaderCode) {
+export async function render(table, pres) {
   const parser = new DOMParser();
   showLog("Loading Layout");
   const response = await fetch('./layout.html');
@@ -110,18 +121,13 @@ export async function render(table, shaderCode) {
   const doc = parser.parseFromString(html, 'text/html');
   const template = doc.querySelector('#layout');
   document.body.replaceChildren(template.content.cloneNode(true));
-  const pre = document.createElement('pre');
-  pre.appendChild(document.createTextNode(shaderCode));
-  document.querySelector('.code-slot').replaceWith(pre);
+  document.querySelector('.wgsl-code-slot').replaceWith(pres.shader);
+  document.querySelector('.js-code-slot').replaceWith(pres.js);
   document.querySelector('.table-slot').replaceWith(table);
 }
 
 export async function compute(config) {
-  showLog(`Running Compute (workgroups=${
-    JSON.stringify(config.workgroups).replace(/\"/g, '')
-  }, subgroups=${
-    JSON.stringify(config.subgroups).replace(/\"/g, '')
-  }, size=${config.rows()}`);
+  showLog(`Running Compute ${config}`);
   try {
     const device = await getGPU();
     device.pushErrorScope('validation');
@@ -175,8 +181,7 @@ async function createPipeline(device, config) {
 
   uniform.updateBuffer(device);
 
-  const outputStride = 4 * (4 * 3);
-  const output = OutputBufferAdapter.create(device, outputStride * config.rows());
+  const output = OutputBufferAdapter.create(device, OUTPUT_STRIDE * config.rows());
 
   const pipeline = device.createComputePipeline({
     layout: 'auto',
@@ -199,12 +204,19 @@ async function readOutput(device, config, commandEncoder, output) {
   device.queue.submit([commandEncoder.finish()]);
   await mapping.read();
 
-  const outputStride = 4 * 4 * 3;
-  return Array.from(bufferRows(output.cpuBuffer.buffer, outputStride, [
+  return Array.from(bufferRows(output.cpuBuffer.buffer, OUTPUT_STRIDE, [
     { type: 'vec3<u32>', name: 'global' },
     { type: 'vec3<u32>', name: 'local' },
     { type: 'vec3<u32>', name: 'workgroup' },
+    { type: 'u32', name: 'local_invocation_index' },
   ], config.rows()));
+}
+
+async function getGPU() {
+  const { navigator } = globalThis;
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter == null) throw new Error('no gpu adapter');
+  return await adapter.requestDevice();
 }
 
 function showOutputTable(results) {
@@ -226,6 +238,7 @@ function showOutputTable(results) {
     { colSpan: 1, label: 'x', read: ['workgroup', 0] },
     { colSpan: 1, label: 'y', read: ['workgroup', 1] },
     { colSpan: 1, label: 'z', read: ['workgroup', 2] },
+    { colSpan: 1, label: 'LII', read: 'local_invocation_index' },
   ];
 
   const table = document.createElement('table');
@@ -240,13 +253,17 @@ function showOutputTable(results) {
     table.appendChild(tr);
   }
 
-  let max = -1;
-  for (let i = 0; i < results.length; i++) {
-    const next = results[i]['global'][0];
-    if (next < max) break;
-    max = next;
+  for (const column of colHeaders.slice(1)) {
+    if (typeof column.read === 'string') continue;
+    const [prop, index] = column.read;
+    let max = -1;
+    for (let i = 0; i < results.length; i++) {
+      const next = results[i][prop][index];
+      if (next < max) break;
+      max = next;
+    }
+    column.max = max;
   }
-  console.log(max);
 
   let id = 0;
   for (const row of results) {
@@ -256,19 +273,28 @@ function showOutputTable(results) {
     tr.appendChild(tdId);
 
     for (const column of colHeaders.slice(1)) {
-      const [prop, index] = column.read;
+      let value, color;
+      if (typeof column.read === 'string') {
+        value = row[column.read];
+        color = 'inherit';
+      } else {
+        const [prop, index] = column.read;
+        value = row[prop][index];
+        const r = value / column.max;
+        color = `
+          color-mix(in srgb, #00ffff calc(100% * (1 - ${r})), #ffff00 calc(100% * ${r}))
+        `;
+      }
+
       const td = document.createElement('td');
-      const value = row[prop][index];
-      const text = document.createTextNode(row[prop][index]);
+      const text = document.createTextNode(value);
       td.appendChild(text);
       tr.appendChild(td);
       if (value === 0) {
         td.style.opacity = 0.5;
-      } else {
-        const r = value / max;
-        td.style.color = `
-          color-mix(in srgb, #00ffff calc(100% * (1 - ${r})), #ffff00 calc(100% * ${r}))
-        `;
+      }
+      if (color != null) {
+        td.style.color = color;
       }
     }
     table.appendChild(tr);
@@ -276,9 +302,47 @@ function showOutputTable(results) {
   return table;
 }
 
-async function getGPU() {
-  const { navigator } = globalThis;
-  const adapter = await navigator.gpu.requestAdapter();
-  if (adapter == null) throw new Error('no gpu adapter');
-  return await adapter.requestDevice();
+function preElements(shaderCode, config) {
+  const createSubGroupVar = (t, c) => {
+    const span = document.createElement('span');
+    span.style.backgroundColor = c;
+    span.style.boxSizing = 'content-box';
+    span.style.border = `8px ${c} solid`;
+    span.style.borderWidth = '2px 8px';
+    span.style.fontWeight = '900';
+    span.appendChild(document.createTextNode(t));
+    return span;
+  };
+
+  const preShader = document.createElement('pre');
+  const [firstHalf, secondHalf] = shaderCode.split(WORKGROUP_REGEX);
+  const wg = config.workgroups;
+  for (const e of [
+    document.createTextNode(firstHalf),
+    document.createTextNode('@workgroup_size('),
+    createSubGroupVar(wg.x, 'red'),
+    document.createTextNode(', '),
+    createSubGroupVar(wg.y, 'blue'),
+    document.createTextNode(', '),
+    createSubGroupVar(wg.z, 'green'),
+    document.createTextNode(')'),
+    document.createTextNode(secondHalf),
+  ]) preShader.appendChild(e)
+
+  const preJs = document.createElement('pre');
+
+  const { x, y, z } = config.subgroups;
+  for (const e of [
+    document.createTextNode('pass.dispatchWorkgroups('),
+    createSubGroupVar(x, 'red'),
+    document.createTextNode(', '),
+    createSubGroupVar(y, 'blue'),
+    document.createTextNode(', '),
+    createSubGroupVar(z, 'green'),
+    document.createTextNode(')'),
+  ]) preJs.appendChild(e)
+
+  return { js: preJs, shader: preShader };
 }
+
+

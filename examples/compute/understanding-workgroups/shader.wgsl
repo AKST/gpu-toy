@@ -4,9 +4,10 @@ struct ComputeSize {
 }
 
 struct OutputItem {
-  g_id: vec3<u32>,
-  l_id: vec3<u32>,
-  wg_id: vec3<u32>,
+  global_id: vec3<u32>,
+  local_id: vec3<u32>,
+  workgroup_id: vec3<u32>,
+  local_invocation_index: u32,
 }
 
 @group(0) @binding(0) var<uniform> size: ComputeSize;
@@ -21,7 +22,10 @@ fn workgroup_experiment(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(local_invocation_id) lid: vec3<u32>,
   @builtin(workgroup_id) wid: vec3<u32>,
+  @builtin(local_invocation_index) lii: u32,
 ) {
-  let index = gid.x + gid.y * size.grid.x + gid.z * size.grid.x * size.grid.y;
-  output[index] = OutputItem(gid, lid, wid);
+  let index = gid.x
+            + gid.y * size.grid.x
+            + gid.z * size.grid.x * size.grid.y;
+  output[index] = OutputItem(gid, lid, wid, lii);
 }

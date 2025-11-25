@@ -6,10 +6,29 @@
   </head>
   <body>
     <template id="layout">
-      <h1>Workgroup output</h1>
       <div class="columns">
         <article>
-          <div class="code-slot"></div>
+          <h1>Workgroup output</h1>
+          <h2>Javascript Side</h2>
+          <ul>
+            <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/GPUComputePassEncoder/dispatchWorkgroups">GPUComputePassEncoder::dispatchWorkgroups</a></li>
+          </ul>
+          <fieldset>
+            <legend>index.js (caller)</legend>
+            <div class="js-code-slot"></div>
+          </fieldset>
+          <h2>Shader Side</h2>
+          <p>Here's the list of builtins</p>
+          <ul>
+            <li><a href="https://www.w3.org/TR/WGSL/#built-in-values-global_invocation_id">global_invocation_id</a></li>
+            <li><a href="https://www.w3.org/TR/WGSL/#built-in-values-local_invocation_id">local_invocation_id</a></li>
+            <li><a href="https://www.w3.org/TR/WGSL/#built-in-values-workgroup_id">workgroup_id</a></li>
+            <li><a href="https://www.w3.org/TR/WGSL/#built-in-values-local_invocation_id">local_invocation_id</a></li>
+          </ul>
+          <fieldset>
+            <legend>shader.wsgl</legend>
+            <div class="wgsl-code-slot"></div>
+          </fieldset>
         </article>
         <div class="table-slot"></div>
       </div>
