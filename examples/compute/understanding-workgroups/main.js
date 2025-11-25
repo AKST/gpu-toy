@@ -8,6 +8,11 @@ const COMPUTE_SHADER_URL = import.meta.resolve('./shader.wgsl');
 const WORKGROUP_REGEX =
   /@workgroup_size\s*\(\s*\d+\s*(?:,\s*\d+\s*(?:,\s*\d+\s*)?)?\)/;
 
+
+function showLog(...args) {
+  window.parent?.postMessage({ kind: 'push-log', log: args });
+}
+
 class Config {
   #workgroups;
   #subgroups;
@@ -82,6 +87,7 @@ export async function main() {
 
   const config = new Config([4, 3, 2], [4, 3, 2]);
   const { table, shaderCode } = await compute(config);
+  showLog("Compute Finished");
   await render(table, shaderCode);
 
   window.addEventListener('message', async ({ data: message }) => {
@@ -98,6 +104,7 @@ export async function main() {
 
 export async function render(table, shaderCode) {
   const parser = new DOMParser();
+  showLog("Loading Layout");
   const response = await fetch('./layout.html');
   const html = await response.text();
   const doc = parser.parseFromString(html, 'text/html');
@@ -110,6 +117,11 @@ export async function render(table, shaderCode) {
 }
 
 export async function compute(config) {
+  showLog(`Running Compute (workgroups=${
+    JSON.stringify(config.workgroups).replace(/\"/g, '')
+  }, subgroups=${
+    JSON.stringify(config.subgroups).replace(/\"/g, '')
+  }, size=${config.rows()}`);
   try {
     const device = await getGPU();
     device.pushErrorScope('validation');
@@ -147,6 +159,7 @@ export async function compute(config) {
 }
 
 async function createPipeline(device, config) {
+  showLog("Loading Shader");
   const response = await fetch(COMPUTE_SHADER_URL);
   const code = config.replaceWorkgroup(await response.text());
   const shader = await device.createShaderModule({ code });
@@ -227,6 +240,14 @@ function showOutputTable(results) {
     table.appendChild(tr);
   }
 
+  let max = -1;
+  for (let i = 0; i < results.length; i++) {
+    const next = results[i]['global'][0];
+    if (next < max) break;
+    max = next;
+  }
+  console.log(max);
+
   let id = 0;
   for (const row of results) {
     const tr = document.createElement('tr');
@@ -237,9 +258,18 @@ function showOutputTable(results) {
     for (const column of colHeaders.slice(1)) {
       const [prop, index] = column.read;
       const td = document.createElement('td');
+      const value = row[prop][index];
       const text = document.createTextNode(row[prop][index]);
       td.appendChild(text);
       tr.appendChild(td);
+      if (value === 0) {
+        td.style.opacity = 0.5;
+      } else {
+        const r = value / max;
+        td.style.color = `
+          color-mix(in srgb, #00ffff calc(100% * (1 - ${r})), #ffff00 calc(100% * ${r}))
+        `;
+      }
     }
     table.appendChild(tr);
   }

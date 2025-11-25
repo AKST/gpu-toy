@@ -200,7 +200,11 @@ try {
   const { device } = await initWebGPU();
   const layoutPromise = showHtmlLayout();
   const shaderPromise = createShader(device);
+
+  showLog('Data Loading');
   const initialData = await loadInitialData();
+  showLog('Data Loaded, running GPU');
+
   const [size, groups, df, inits] = setupData(initialData);
   const countries = csv.getSize(inits);
   const uniformCfg = UniformAdapter.create([

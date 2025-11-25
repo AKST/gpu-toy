@@ -19,14 +19,19 @@
         max-width: 550px;
       }
       table {
+        --cell-padding: 4px;
         margin: 0 auto;
         border-right: 0.5px solid white;
         border-bottom: 0.5px solid white;
         th { background: white; color: black }
         & tr > :is(td,th) {
-          padding: 2px 4px;
+          padding: 2px var(--cell-padding);
           border-left: 0.5px solid white;
           border-top: 0.5px solid white;
+        }
+        td {
+          font-family: monospace;
+          width: calc((var(--cell-padding) + 2ex) * 2);
         }
       }
       * { box-sizing: border-box; color: white }
@@ -34,8 +39,9 @@
 
       .columns {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr max-content;
       }
+      pre { white-space: break-spaces; }
     </style>
   </head>
   <body>
