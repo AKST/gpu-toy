@@ -1,8 +1,7 @@
 import * as csv from '@common/data/csv.js';
 import { initWebGPU } from '@common/webgpu/init.js';
 import { createStep, createMapping, initStructArrayBuffer, extractStructArrays } from '@common/webgpu/setup.js';
-import { OutputBufferAdapter } from '@common/webgpu/buffer.js';
-import { UniformAdapter } from '@common/webgpu/uniforms.js';
+import { OutputBufferAdapter, UniformAdapter } from '@common/webgpu/buffer.js';
 import { setupData, loadInitialData, showHtmlLayout, createShader } from './util.js';
 
 // Combined output buffer: 12 contiguous fields
@@ -205,24 +204,24 @@ try {
   const [size, groups, df, inits] = setupData(initialData);
   const countries = csv.getSize(inits);
   const uniformCfg = UniformAdapter.create([
-    { type: 'u32', size: 4, init: 25, name: 'year_per_country' },
-    { type: 'u32', size: 4, init: size, name: 'observations' },
-    { type: 'u32', size: 4, init: countries, name: 'countries' },
-    { type: 'u32', size: 4, init: 10, name: 'ralph_newton_iterations' },
-    { type: 'u32', size: 4, init: 0, name: 'use_fixed_params' },
+    { type: 'u32', init: 25, name: 'year_per_country' },
+    { type: 'u32', init: size, name: 'observations' },
+    { type: 'u32', init: countries, name: 'countries' },
+    { type: 'u32', init: 10, name: 'ralph_newton_iterations' },
+    { type: 'u32', init: 0, name: 'use_fixed_params' },
   ]);
 
   const uniformExo = UniformAdapter.create([
-    { type: 'f32', size: 4, init: 2/3, name: 'alpha' },
-    { type: 'f32', size: 4, init: 0.4, name: 'saving' },
-    { type: 'f32', size: 4, init: 0.07, name: 'depreciation' },
+    { type: 'f32', init: 2/3, name: 'alpha' },
+    { type: 'f32', init: 0.4, name: 'saving' },
+    { type: 'f32', init: 0.07, name: 'depreciation' },
   ]);
 
   const uniformEff = UniformAdapter.create([
-    { type: 'f32', size: 4, init: INIT_COEFF_PHONE, name: 'phoneEffect_pc' },
-    { type: 'f32', size: 4, init: INIT_COEFF_INTERNET, name: 'phoneInternet_pc' },
-    { type: 'f32', size: 4, init: INIT_LEGACY, name: 'phoneEffect' },
-    { type: 'f32', size: 4, init: INIT_LEGACY, name: 'phoneInternet' },
+    { type: 'f32', init: INIT_COEFF_PHONE, name: 'phoneEffect_pc' },
+    { type: 'f32', init: INIT_COEFF_INTERNET, name: 'phoneInternet_pc' },
+    { type: 'f32', init: INIT_LEGACY, name: 'phoneEffect' },
+    { type: 'f32', init: INIT_LEGACY, name: 'phoneInternet' },
   ]);
 
   showLog('Observations:', size);
@@ -251,9 +250,12 @@ try {
     df.avgDepreciation,
   ], GPUBufferUsage.COPY_DST);
 
-  const bufferUnifExo = uniformExo.createBuffer(device);
-  const bufferUnifEff = uniformEff.createBuffer(device);
-  const bufferUnifCfg = uniformCfg.createBuffer(device);
+  const bufferUnifExo = uniformExo.getBuffer(device);
+  const bufferUnifEff = uniformEff.getBuffer(device);
+  const bufferUnifCfg = uniformCfg.getBuffer(device);
+  uniformExo.updateBuffer(device);
+  uniformEff.updateBuffer(device);
+  uniformCfg.updateBuffer(device);
   const shaderModule = await shaderPromise;
 
   const step1 = createStep({
