@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <base target="_blank">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="application-name" content="OLS on GPU" lang="en" />
+    <meta name="description" content="Understanding workgroups subgroups, etc">
+    <link rel="stylesheet" href="../../../common/frame-style.css">
+    <title>Understanding Workgroups</title>
+    <script type="importmap">
+      { "imports": { "@common/": "../../../common/" } }
+    </script>
+    <style>
+      .container { display: none; }
+      body { padding: 16px; }
+      .text-container {
+        margin: 0 auto;
+        max-width: 550px;
+      }
+      table {
+        margin: 0 auto;
+        border-right: 0.5px solid white;
+        border-bottom: 0.5px solid white;
+        th { background: white; color: black }
+        & tr > :is(td,th) {
+          padding: 2px 4px;
+          border-left: 0.5px solid white;
+          border-top: 0.5px solid white;
+        }
+      }
+      * { box-sizing: border-box; color: white }
+      p, ul { line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <script>
+      window.addEventListener('error', event => console.error(event.error));
+      window.addEventListener('unhandledrejection', event => console.error(event.error));
+      if (window.parent == null) alert('note this page was designed to run in an iframe');
+    </script>
+    <script type="module">
+      import { main } from './main.js';
+      main();
+    </script>
+  </body>
+</html>

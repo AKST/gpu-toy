@@ -1,0 +1,196 @@
+import {
+  UniformAdapter,
+  OutputBufferAdapter,
+  readStructuredData,
+} from '@common/webgpu/buffer.js';
+
+const COMPUTE_SHADER_URL = import.meta.resolve('./shader.wgsl');
+const WORKGROUP_REGEX =
+  /@workgroup_size\s*\(\s*\d+\s*(?:,\s*\d+\s*(?:,\s*\d+\s*)?)?\)/;
+
+class Config {
+  #workgroups;
+  #subgroups;
+
+  constructor(workgroups, subgroups) {
+    this.#workgroups = workgroups
+    this.#subgroups = subgroups
+  }
+
+  replaceWorkgroup(source) {
+    if (this.#workgroups.length > 3 || this.#workgroups.length < 1) {
+      throw new Error('invalid workgroup size, '+this.#workgroups.length);
+    }
+    const replacement = `@workgroup_size(${this.#workgroups.join(', ')})`;
+    return source.replace(WORKGROUP_REGEX, replacement);
+  }
+
+  rows() {
+    const { x, y, z } = this.grid;
+    return x * y * z;
+  }
+
+  get workgroups() {
+    const x = this.#workgroups[0] ?? 1;
+    const y = this.#workgroups[1] ?? 1;
+    const z = this.#workgroups[2] ?? 1;
+    return { x, y, z }
+  }
+
+  get subgroups() {
+    const x = this.#subgroups[0] ?? 1;
+    const y = this.#subgroups[1] ?? 1;
+    const z = this.#subgroups[2] ?? 1;
+    return { x, y, z }
+  }
+
+  get grid() {
+    const { workgroups: wg, subgroups: sg } = this;
+    return { x: wg.x * sg.x, y: wg.y * sg.y, z: wg.z * sg.z }
+  }
+}
+
+function * bufferRows(buffer, stride, layout, rows) {
+  for (let i = 0; i < rows; i++) {
+    const row = {};
+    const readFrom = i * stride;
+    readStructuredData({
+      arrayBuffer: buffer,
+      layout,
+      data: { kind: 'rows', rows: [row] },
+      readFrom,
+      writeTo: 0,
+    });
+    yield row;
+  }
+}
+
+export async function main() {
+  try {
+    const config = new Config([4, 3, 2], [4, 3, 2]);
+    const device = await getGPU();
+
+    device.pushErrorScope('validation');
+    const { uniform, output, pipeline, bindGroup } = await createPipeline(device, config);
+    const commandEncoder = device.createCommandEncoder();
+    const pass = commandEncoder.beginComputePass();
+    const { subgroups: sg } = config;
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(sg.x, sg.y, sg.z);
+    pass.end();
+
+    const mapping = output.createMapping(device, commandEncoder);
+    device.queue.submit([commandEncoder.finish()]);
+    await mapping.read();
+
+    const outputStride = 4 * 4 * 3;
+    const results = Array.from(bufferRows(output.cpuBuffer.buffer, outputStride, [
+      { type: 'vec3<u32>', name: 'global' },
+      { type: 'vec3<u32>', name: 'local' },
+      { type: 'vec3<u32>', name: 'workgroup' },
+    ], config.rows()));
+
+    const topHeaders = [
+      { colSpan: 1, label: '' },
+      { colSpan: 3, label: 'Global' },
+      { colSpan: 3, label: 'Local' },
+      { colSpan: 3, label: 'WorkGroup' },
+    ];
+
+    const colHeaders = [
+      { colSpan: 1, label: 'ID' },
+      { colSpan: 1, label: 'x', read: ['global', 0] },
+      { colSpan: 1, label: 'y', read: ['global', 1] },
+      { colSpan: 1, label: 'z', read: ['global', 2] },
+      { colSpan: 1, label: 'x', read: ['local', 0] },
+      { colSpan: 1, label: 'y', read: ['local', 1] },
+      { colSpan: 1, label: 'z', read: ['local', 2] },
+      { colSpan: 1, label: 'x', read: ['workgroup', 0] },
+      { colSpan: 1, label: 'y', read: ['workgroup', 1] },
+      { colSpan: 1, label: 'z', read: ['workgroup', 2] },
+    ];
+
+    const table = document.createElement('table');
+    for (const group of [topHeaders, colHeaders]) {
+      const tr = document.createElement('tr');
+      for (const header of group) {
+        const th = document.createElement('th');
+        th.colSpan = header.colSpan;
+        th.appendChild(document.createTextNode(header.label));
+        tr.appendChild(th);
+      }
+      table.appendChild(tr);
+    }
+
+    let id = 0;
+    for (const row of results) {
+      const tr = document.createElement('tr');
+      const tdId = document.createElement('td');
+      tdId.appendChild(document.createTextNode(id++));
+      tr.appendChild(tdId);
+
+      for (const column of colHeaders.slice(1)) {
+        const [prop, index] = column.read;
+        const td = document.createElement('td');
+        const text = document.createTextNode(row[prop][index]);
+        td.appendChild(text);
+        tr.appendChild(td);
+      }
+      table.appendChild(tr);
+    }
+    document.body.appendChild(table);
+
+    const errorScope = await device.popErrorScope();
+    if (errorScope) {
+      console.error('GPU:',errorScope.message);
+      console.info(errorScope);
+    } else {
+      console.log('GPU: now running');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function createPipeline(device, config) {
+  const response = await fetch(COMPUTE_SHADER_URL);
+  const code = config.replaceWorkgroup(await response.text());
+  const shader = await device.createShaderModule({ code });
+
+  const uniform = UniformAdapter.create([
+    { type: 'vec3<u32>', name: 'grid' },
+    { type: 'vec3<u32>', name: 'wg' },
+  ]);
+
+  const { workgroups: wg, grid } = config;
+  uniform.update('grid', [grid.x, grid.y, grid.z]);
+  uniform.update('wg', [wg.x, wg.y, wg.z]);
+
+  uniform.updateBuffer(device);
+
+  const outputStride = 4 * (4 * 3);
+  const output = OutputBufferAdapter.create(device, outputStride * config.rows());
+
+  const pipeline = device.createComputePipeline({
+    layout: 'auto',
+    compute: { module: shader, entryPoint: 'workgroup_experiment' },
+  });
+
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: uniform.getBuffer(device) } },
+      { binding: 1, resource: { buffer: output.gpuBuffer } },
+    ],
+  });
+
+  return { uniform, output, pipeline, bindGroup };
+}
+
+async function getGPU() {
+  const { navigator } = globalThis;
+  const adapter = await navigator.gpu.requestAdapter();
+  if (adapter == null) throw new Error('no gpu adapter');
+  return await adapter.requestDevice();
+}

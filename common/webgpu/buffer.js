@@ -182,6 +182,28 @@ function readCell(df, row, col) {
 }
 
 /**
+ * Write to a cell from a table of data with an
+ * ambigious layout and structure.
+ *
+ * @param {DataFrame} df
+ * @param {number} row
+ * @param {string} col
+ * @param {any} value
+ */
+function writeCell(df, row, col, value) {
+  switch (df.kind) {
+    case 'rows':
+      df.rows[row][col] = value;
+      break;
+    case 'cols':
+      df.cols[col][row] = value;
+      break;
+    default:
+      throw new Unreachable(df);
+  }
+}
+
+/**
  * Writes structured data to an ArrayBuffer with proper alignment
  * @param {{
  *   arrayBuffer: ArrayBuffer,
@@ -192,7 +214,7 @@ function readCell(df, row, col) {
  * }} params
  * @returns {number} - final offset after writing
  */
-function writeStructuredData({
+export function writeStructuredData({
   arrayBuffer,
   layout,
   data,
@@ -244,6 +266,91 @@ function writeStructuredData({
         throw new Unreachable(elemType);
     }
 
+    offset += fieldSize;
+  }
+
+  return offset;
+}
+
+/**
+ * Reads structured data from an ArrayBuffer with proper alignment
+ * @param {{
+ *   arrayBuffer: ArrayBuffer,
+ *   layout: { name: string, type: GpuType }[],
+ *   data: DataFrame,
+ *   readFrom: number,
+ *   writeTo: number,
+ * }} params
+ * @returns {number} - final offset after reading
+ */
+export function readStructuredData({
+  arrayBuffer,
+  layout,
+  data,
+  readFrom,
+  writeTo,
+}) {
+  const dataAsFloat = new Float32Array(arrayBuffer);
+  const dataAsUint = new Uint32Array(arrayBuffer);
+  const dataAsSint = new Int32Array(arrayBuffer);
+
+  let offset = readFrom;
+
+  for (const field of layout) {
+    const fieldSize = sizeOf(field.type);
+    const alignment = alignmentOf(field.type);
+    offset = Math.ceil(offset / alignment) * alignment;
+    const idx = offset / 4;
+
+    const shape = shapeOf(field.type);
+    const elemType = elemOf(field.type);
+
+    let value;
+    switch (shape) {
+      case 'scalar': {
+        switch (elemType) {
+          case 'f32':
+            value = dataAsFloat[idx];
+            break;
+          case 'u32':
+            value = dataAsUint[idx];
+            break;
+          case 'i32':
+            value = dataAsSint[idx];
+            break;
+          default:
+            throw new Unreachable(elemType);
+        }
+        break;
+      }
+      case 'vector': {
+        const length = fieldSize / sizeOf(elemType);
+        switch (elemType) {
+          case 'f32':
+            value = Array.from(dataAsFloat.slice(idx, idx + length));
+            break;
+          case 'u32':
+            value = Array.from(dataAsUint.slice(idx, idx + length));
+            break;
+          case 'i32':
+            value = Array.from(dataAsSint.slice(idx, idx + length));
+            break;
+          default:
+            throw new Unreachable(elemType);
+        }
+        break;
+      }
+      case 'DOMMatrix': {
+        const length = fieldSize / sizeOf(elemType);
+        const matrixData = dataAsFloat.slice(idx, idx + length);
+        value = new DOMMatrix(Array.from(matrixData));
+        break;
+      }
+      default:
+        throw new Unreachable(shape);
+    }
+
+    writeCell(data, writeTo, field.name, value);
     offset += fieldSize;
   }
 
