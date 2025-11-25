@@ -1,6 +1,9 @@
 # Proposal
 
-So I am writing a few WGSL compute shaders to compute ordinary least squares in a few passed in a non blocking manner
+So I am writing a few WGSL compute shaders to compute ordinary least squares in
+a few passed in a non blocking manner.
+
+## General Overview
 
 - A = XᵀX is done in many smaller steps to avoid atomics or any synchronisation
 - B = A⁻¹ is then done in 1 step based on the assumption the operation will be small? If not we should split it up.
@@ -10,6 +13,8 @@ So I am writing a few WGSL compute shaders to compute ordinary least squares in 
 Also
 - let k = the number of variables
 - let n = the number of observations
+
+### Idea 1 — MultiStep matrix multiplication
 
 A is broken into multiple steps by dividing and conquering, there will likely
 be floor(log2(n)) passes, for the first pass there'll be (k, k, n/2) work
@@ -57,4 +62,34 @@ With this
 In theory `mul_apply` and `mul_reduce` are general enough they can be used
 for the subsequent multplication of BXᵀ? I'm not really sure? Maybe I need
 to make some more changes to accomodate that.
+
+### Idea 2 — subGroupAdd for reduction
+
+I have since learnt there are a set of operations called [subgroup
+operations](https://www.w3.org/TR/WGSL/#subgroup-builtin-functions).
+
+I think they may be a synt
+
+```wgsl
+struct Config { n: u32, k: u32 }
+
+@group(0) @binding(0) var<uniform> config: Config;
+@group(0) @binding(1) var<storage, read> self: array<f32>; // size n*k
+@group(0) @binding(2) var<storage, read_write> selfT_self: array<f32>; // size k^2
+
+@compute @workgroup(w, sg, sg)
+fn multiply_selfT_self(@builtin(global_invocation_id) gid: vec3<u32>) {
+  // condition
+  let mul = self[??] * self[??];
+  let res = subGroupAdd(mul);
+  // ??
+  selfT_self[??] = res;
+}
+```
+
+In javascript (I think, `n` may need to modded by the size of the workgroup)
+
+```js
+pipeline.dispatch(Math.ceil(n / w), Math.ceil(k / sg), Math.ceil(k / sg))
+```
 
