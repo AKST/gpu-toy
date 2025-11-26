@@ -15,19 +15,19 @@ function showLog(...args) {
 }
 
 class Config {
-  #workgroups;
-  #subgroups;
+  #workgroupSizes;
+  #workgroupCount;
 
-  constructor(workgroups, subgroups) {
-    this.#workgroups = workgroups
-    this.#subgroups = subgroups
+  constructor(workgroupSizes, workgroupCount) {
+    this.#workgroupSizes = workgroupSizes
+    this.#workgroupCount = workgroupCount
   }
 
   replaceWorkgroup(source) {
-    if (this.#workgroups.length > 3 || this.#workgroups.length < 1) {
-      throw new Error('invalid workgroup size, '+this.#workgroups.length);
+    if (this.#workgroupSizes.length > 3 || this.#workgroupSizes.length < 1) {
+      throw new Error('invalid workgroup size, '+this.#workgroupSizes.length);
     }
-    const replacement = `@workgroup_size(${this.#workgroups.join(', ')})`;
+    const replacement = `@workgroup_size(${this.#workgroupSizes.join(', ')})`;
     return source.replace(WORKGROUP_REGEX, replacement);
   }
 
@@ -36,30 +36,30 @@ class Config {
     return x * y * z;
   }
 
-  get workgroups() {
-    const x = this.#workgroups[0] ?? 1;
-    const y = this.#workgroups[1] ?? 1;
-    const z = this.#workgroups[2] ?? 1;
+  get workgroupSizes() {
+    const x = this.#workgroupSizes[0] ?? 1;
+    const y = this.#workgroupSizes[1] ?? 1;
+    const z = this.#workgroupSizes[2] ?? 1;
     return { x, y, z }
   }
 
-  get subgroups() {
-    const x = this.#subgroups[0] ?? 1;
-    const y = this.#subgroups[1] ?? 1;
-    const z = this.#subgroups[2] ?? 1;
+  get workgroupCount() {
+    const x = this.#workgroupCount[0] ?? 1;
+    const y = this.#workgroupCount[1] ?? 1;
+    const z = this.#workgroupCount[2] ?? 1;
     return { x, y, z }
   }
 
   get grid() {
-    const { workgroups: wg, subgroups: sg } = this;
-    return { x: wg.x * sg.x, y: wg.y * sg.y, z: wg.z * sg.z }
+    const { workgroupSizes: wgs, workgroupCount: wgc } = this;
+    return { x: wgs.x * wgc.x, y: wgs.y * wgc.y, z: wgs.z * wgc.z }
   }
 
   toString() {
-    return `Config(workgroups=${
-      JSON.stringify(this.workgroups).replace(/\"/g, '')
-    }, subgroups=${
-      JSON.stringify(this.subgroups).replace(/\"/g, '')
+    return `Config(workgroupSizes=${
+      JSON.stringify(this.workgroupSizes).replace(/\"/g, '')
+    }, workgroupCount=${
+      JSON.stringify(this.workgroupCount).replace(/\"/g, '')
     }, size=${
       this.rows()
     })`;
@@ -85,18 +85,18 @@ export async function main() {
   window.parent?.postMessage({
     kind: 'register-knobs',
     knobs: [
-      { kind: 'title', title: 'Work Groups' },
+      { kind: 'title', title: 'Workgroup Sizes' },
       { kind: 'number', name: 'wgX', label: 'x', init: 4 },
-      { kind: 'number', name: 'wgY', label: 'y', init: 3 },
+      { kind: 'number', name: 'wgY', label: 'y', init: 2 },
       { kind: 'number', name: 'wgZ', label: 'z', init: 2 },
-      { kind: 'title', title: '"Sub" Groups' },
+      { kind: 'title', title: 'Workgroup Counts' },
       { kind: 'number', name: 'sgX', label: 'x', init: 4 },
-      { kind: 'number', name: 'sgY', label: 'y', init: 3 },
+      { kind: 'number', name: 'sgY', label: 'y', init: 2 },
       { kind: 'number', name: 'sgZ', label: 'z', init: 2 },
     ],
   });
 
-  const config = new Config([4, 3, 2], [4, 3, 2]);
+  const config = new Config([4, 2, 2], [4, 2, 2]);
   const { table, shaderCode } = await compute(config);
   showLog("Compute Finished");
   await render(table, preElements(shaderCode, config));
@@ -140,10 +140,10 @@ export async function compute(config) {
 
     const commandEncoder = device.createCommandEncoder();
     const pass = commandEncoder.beginComputePass();
-    const { subgroups: sg } = config;
+    const { workgroupCount: wgc } = config;
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
-    pass.dispatchWorkgroups(sg.x, sg.y, sg.z);
+    pass.dispatchWorkgroups(wgc.x, wgc.y, wgc.z);
     pass.end();
 
     const errorScope = await device.popErrorScope();
@@ -175,9 +175,9 @@ async function createPipeline(device, config) {
     { type: 'vec3<u32>', name: 'wg' },
   ]);
 
-  const { workgroups: wg, grid } = config;
+  const { workgroupSizes: wgs, grid } = config;
   uniform.update('grid', [grid.x, grid.y, grid.z]);
-  uniform.update('wg', [wg.x, wg.y, wg.z]);
+  uniform.update('wg', [wgs.x, wgs.y, wgs.z]);
 
   uniform.updateBuffer(device);
 
@@ -316,22 +316,22 @@ function preElements(shaderCode, config) {
 
   const preShader = document.createElement('pre');
   const [firstHalf, secondHalf] = shaderCode.split(WORKGROUP_REGEX);
-  const wg = config.workgroups;
+  const wgs = config.workgroupSizes;
   for (const e of [
     document.createTextNode(firstHalf),
     document.createTextNode('@workgroup_size('),
-    createSubGroupVar(wg.x, 'red'),
+    createSubGroupVar(wgs.x, 'red'),
     document.createTextNode(', '),
-    createSubGroupVar(wg.y, 'blue'),
+    createSubGroupVar(wgs.y, 'blue'),
     document.createTextNode(', '),
-    createSubGroupVar(wg.z, 'green'),
+    createSubGroupVar(wgs.z, 'green'),
     document.createTextNode(')'),
     document.createTextNode(secondHalf),
   ]) preShader.appendChild(e)
 
   const preJs = document.createElement('pre');
 
-  const { x, y, z } = config.subgroups;
+  const { x, y, z } = config.workgroupCount;
   for (const e of [
     document.createTextNode('pass.dispatchWorkgroups('),
     createSubGroupVar(x, 'red'),
