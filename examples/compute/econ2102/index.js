@@ -1,7 +1,11 @@
 import * as csv from '@common/data/csv.js';
 import { initWebGPU } from '@common/webgpu/init.js';
 import { createStep, createMapping, initStructArrayBuffer, extractStructArrays } from '@common/webgpu/setup.js';
-import { OutputBufferAdapter, UniformAdapter } from '@common/webgpu/buffer.js';
+import {
+  OutputBufferAdapter,
+  MemoryLayout,
+  UniformAdapter,
+} from '@common/webgpu/buffer.js';
 import { setupData, loadInitialData, showHtmlLayout, createShader } from './util.js';
 
 // Combined output buffer: 12 contiguous fields
@@ -9,6 +13,52 @@ const OUTPUT_FIELDS = 12;
 const INIT_LEGACY = 0.00000001
 const INIT_COEFF_PHONE = 0.1;
 const INIT_COEFF_INTERNET = 0.1;
+
+const layouts = {
+  config: {
+    main: MemoryLayout.create([
+      { type: 'u32', name: 'year_per_country' },
+      { type: 'u32', name: 'observations' },
+      { type: 'u32', name: 'countries' },
+      { type: 'u32', name: 'ralph_newton_iterations' },
+      { type: 'u32', name: 'use_fixed_params' },
+    ]),
+    effects: MemoryLayout.create([
+      { type: 'f32', name: 'phoneEffect_pc' },
+      { type: 'f32', name: 'phoneInternet_pc' },
+      { type: 'f32', name: 'phoneEffect' },
+      { type: 'f32', name: 'phoneInternet' },
+    ]),
+  },
+  output: MemoryLayout.create([
+    { type: 'f32', name: 'employed' },
+    { type: 'f32', name: 'ma_capital' },
+    { type: 'f32', name: 'ma_capital_ss' },
+    { type: 'f32', name: 'ma_output' },
+    { type: 'f32', name: 'ma_tech' },
+    { type: 'f32', name: 'mb_capital' },
+    { type: 'f32', name: 'mb_capital_ss' },
+    { type: 'f32', name: 'mb_output' },
+    { type: 'f32', name: 'mb_tech' },
+    { type: 'f32', name: 'mc_capital' },
+    { type: 'f32', name: 'mc_capital_ss' },
+    { type: 'f32', name: 'mc_output' },
+  ]),
+  timeseries: {
+    primary: MemoryLayout.create([
+      { type: 'f32', name: 'alpha' },
+      { type: 'f32', name: 'saving' },
+      { type: 'f32', name: 'depreciation' },
+    ]),
+    auxiliary: MemoryLayout.create([
+      { type: 'f32', name: 'unemployment' },
+      { type: 'f32', name: 'labour_force' },
+      { type: 'f32', name: 'mobile_phone_subscription' },
+      { type: 'f32', name: 'mobile_phone_internet_connections' },
+      { type: 'f32', name: 'population' },
+    ]),
+  },
+};
 
 export class Dispatcher {
   #initData;
@@ -195,141 +245,144 @@ function sendInitialisationMessage() {
   });
 }
 
-try {
-  sendInitialisationMessage();
-  const { device } = await initWebGPU();
-  const layoutPromise = showHtmlLayout();
-  const shaderPromise = createShader(device);
+export async function main() {
+  try {
+    sendInitialisationMessage();
+    const { device } = await initWebGPU();
+    const layoutPromise = showHtmlLayout();
+    const shaderPromise = createShader(device);
 
-  showLog('Data Loading');
-  const initialData = await loadInitialData();
-  showLog('Data Loaded, running GPU');
+    showLog('Data Loading');
+    const initialData = await loadInitialData();
+    showLog('Data Loaded, running GPU');
 
-  const [size, groups, df, inits] = setupData(initialData);
-  const countries = csv.getSize(inits);
-  const uniformCfg = UniformAdapter.create([
-    { type: 'u32', init: 25, name: 'year_per_country' },
-    { type: 'u32', init: size, name: 'observations' },
-    { type: 'u32', init: countries, name: 'countries' },
-    { type: 'u32', init: 10, name: 'ralph_newton_iterations' },
-    { type: 'u32', init: 0, name: 'use_fixed_params' },
-  ]);
+    const [size, groups, df, inits] = setupData(initialData);
+    const countries = csv.getSize(inits);
 
-  const uniformExo = UniformAdapter.create([
-    { type: 'f32', init: 2/3, name: 'alpha' },
-    { type: 'f32', init: 0.4, name: 'saving' },
-    { type: 'f32', init: 0.07, name: 'depreciation' },
-  ]);
+    const uniformCfg = UniformAdapter.fromLayout(layouts.config.main, {
+      year_per_country: 25,
+      observations: size,
+      countries,
+      ralph_newton_iterations: 10,
+      use_fixed_params: 0,
+    });
 
-  const uniformEff = UniformAdapter.create([
-    { type: 'f32', init: INIT_COEFF_PHONE, name: 'phoneEffect_pc' },
-    { type: 'f32', init: INIT_COEFF_INTERNET, name: 'phoneInternet_pc' },
-    { type: 'f32', init: INIT_LEGACY, name: 'phoneEffect' },
-    { type: 'f32', init: INIT_LEGACY, name: 'phoneInternet' },
-  ]);
+    const uniformExo = UniformAdapter.fromLayout(layouts.timeseries.primary, {
+      alpha: 2/3,
+      saving: 0.4,
+      depreciation: 0.07,
+    });
 
-  showLog('Observations:', size);
-  showLog('Countries:', countries);
-  device.pushErrorScope('validation');
+    const uniformEff = UniformAdapter.fromLayout(layouts.config.effects, {
+      phoneEffect_pc: INIT_COEFF_PHONE,
+      phoneInternet_pc: INIT_COEFF_INTERNET,
+      phoneEffect: INIT_LEGACY,
+      phoneInternet: INIT_LEGACY,
+    });
 
-  const { COPY_DST, COPY_SRC } = GPUBufferUsage;
-  const bufferCountryConfig = initStructArrayBuffer(device, [
-    inits.offsets,
-    inits.capital,
-    inits.technology,
-  ], COPY_DST);
+    showLog('Observations:', size);
+    showLog('Countries:', countries);
+    device.pushErrorScope('validation');
 
-  const outputBuffer = OutputBufferAdapter.create(device, size * OUTPUT_FIELDS);
-  const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
-    df.unemployment,
-    df.labourForce,
-    df.mobilePhoneSubscription,
-    df.mobilePhoneInternetConnections,
-    df.population,
-  ], GPUBufferUsage.COPY_DST);
+    const { COPY_DST, COPY_SRC } = GPUBufferUsage;
+    const bufferCountryConfig = initStructArrayBuffer(device, [
+      inits.offsets,
+      inits.capital,
+      inits.technology,
+    ], COPY_DST);
 
-  const bufferPrimaryTimeSeries = initStructArrayBuffer(device, [
-    df.laboursShare,
-    df.grossSavingsPct,
-    df.avgDepreciation,
-  ], GPUBufferUsage.COPY_DST);
+    const outputBuffer = OutputBufferAdapter.create(device, size, layouts.output);
+    const bufferAuxiliaryTimeSeries = initStructArrayBuffer(device, [
+      df.unemployment,
+      df.labourForce,
+      df.mobilePhoneSubscription,
+      df.mobilePhoneInternetConnections,
+      df.population,
+    ], GPUBufferUsage.COPY_DST);
 
-  const bufferUnifExo = uniformExo.getBuffer(device);
-  const bufferUnifEff = uniformEff.getBuffer(device);
-  const bufferUnifCfg = uniformCfg.getBuffer(device);
-  uniformExo.updateBuffer(device);
-  uniformEff.updateBuffer(device);
-  uniformCfg.updateBuffer(device);
-  const shaderModule = await shaderPromise;
+    const bufferPrimaryTimeSeries = initStructArrayBuffer(device, [
+      df.laboursShare,
+      df.grossSavingsPct,
+      df.avgDepreciation,
+    ], GPUBufferUsage.COPY_DST);
 
-  const step1 = createStep({
-    device,
-    shaderModule,
-    uniforms: [
-      { binding: 1, resource: { buffer: bufferUnifEff } },
-      { binding: 2, resource: { buffer: bufferUnifCfg } },
-    ],
-    workGroups: Math.ceil(size / 64),
-    entryPoint: 'step1',
-    entries: [
-      { binding: 0, resource: { buffer: bufferCountryConfig } },
-      { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
-      { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
-    ],
-  });
+    const bufferUnifExo = uniformExo.getBuffer(device);
+    const bufferUnifEff = uniformEff.getBuffer(device);
+    const bufferUnifCfg = uniformCfg.getBuffer(device);
+    uniformExo.updateBuffer(device);
+    uniformEff.updateBuffer(device);
+    uniformCfg.updateBuffer(device);
+    const shaderModule = await shaderPromise;
 
-  const step2 = createStep({
-    device,
-    shaderModule,
-    uniforms: [
-      { binding: 0, resource: { buffer: bufferUnifExo } },
-      { binding: 2, resource: { buffer: bufferUnifCfg } },
-    ],
-    workGroups: [countries, 3, 1],
-    entryPoint: 'step2',
-    entries: [
-      { binding: 0, resource: { buffer: bufferCountryConfig } },
-      { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
-      { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
-    ],
-  });
+    const step1 = createStep({
+      device,
+      shaderModule,
+      uniforms: [
+        { binding: 1, resource: { buffer: bufferUnifEff } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
+      ],
+      workGroups: Math.ceil(size / 64),
+      entryPoint: 'step1',
+      entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
+        { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
+        { binding: 20, resource: { buffer: bufferAuxiliaryTimeSeries } },
+      ],
+    });
 
-  const step3 = createStep({
-    device,
-    shaderModule,
-    uniforms: [
-      { binding: 0, resource: { buffer: bufferUnifExo } },
-      { binding: 2, resource: { buffer: bufferUnifCfg } },
-    ],
-    workGroups: [Math.ceil(size / 64), 3, 1],
-    entryPoint: 'step3',
-    entries: [
-      { binding: 0, resource: { buffer: bufferCountryConfig } },
-      { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
-      { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
-    ],
-  });
+    const step2 = createStep({
+      device,
+      shaderModule,
+      uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
+      ],
+      workGroups: [countries, 3, 1],
+      entryPoint: 'step2',
+      entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
+        { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
+        { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
+      ],
+    });
 
-  const uniforms = {
-    exo: uniformExo,
-    eff: uniformEff,
-    cfg: uniformCfg,
-  };
-  const renderer = new Renderer(device, outputBuffer, [step1, step2, step3], uniforms);
-  const dispatcher = new Dispatcher(inits, df, renderer);
-  window.addEventListener('message', message => dispatcher.onMessage(message));
-  await renderer.runGPU(df);
+    const step3 = createStep({
+      device,
+      shaderModule,
+      uniforms: [
+        { binding: 0, resource: { buffer: bufferUnifExo } },
+        { binding: 2, resource: { buffer: bufferUnifCfg } },
+      ],
+      workGroups: [Math.ceil(size / 64), 3, 1],
+      entryPoint: 'step3',
+      entries: [
+        { binding: 0, resource: { buffer: bufferCountryConfig } },
+        { binding: 10, resource: { buffer: outputBuffer.gpuBuffer } },
+        { binding: 30, resource: { buffer: bufferPrimaryTimeSeries } },
+      ],
+    });
 
-  const errorScope = await device.popErrorScope();
-  if (errorScope) {
-    console.error('GPU:',errorScope.message);
-    showLog('error', errorScope.message);
-    console.info(errorScope);
-  } else {
-    showLog('done');
+    const uniforms = {
+      exo: uniformExo,
+      eff: uniformEff,
+      cfg: uniformCfg,
+    };
+    const renderer = new Renderer(device, outputBuffer, [step1, step2, step3], uniforms);
+    const dispatcher = new Dispatcher(inits, df, renderer);
+    window.addEventListener('message', message => dispatcher.onMessage(message));
+    await renderer.runGPU(df);
+
+    const errorScope = await device.popErrorScope();
+    if (errorScope) {
+      console.error('GPU:',errorScope.message);
+      showLog('error', errorScope.message);
+      console.info(errorScope);
+    } else {
+      showLog('done');
+    }
+
+    await layoutPromise;
+  } catch (e) {
+    console.error(e);
   }
-
-  await layoutPromise;
-} catch (e) {
-  console.error(e);
 }

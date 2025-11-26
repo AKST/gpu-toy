@@ -158,6 +158,69 @@ export function alignmentOf(t) {
   }
 }
 
+export class MemoryLayout {
+  /** @type {number} */ #stride;
+  /** @type {{ name: string, type: GpuType }[]} */ #fields;
+
+  /**
+   * @param {{ name: string, type: GpuType }[]} fields
+   * @param {number} stride
+   */
+  constructor(fields, stride) {
+    this.#fields = fields;
+    this.#stride = stride;
+  }
+
+  /** @returns {readonly { name: string, type: GpuType }[]} */
+  get fields() { return this.#fields; }
+
+  get stride() { return this.#stride; }
+
+  /** @param {...any} args */
+  createRecord(...args) {
+    if (args.length != this.#fields.length) throw new Error();
+    return Object.fromEntries(
+      this.#fields.map((o, i) => ([o.name, args[i]]))
+    );
+  }
+
+  /**
+   * @param {(
+   *   | { kind: 'struct' }
+   *   | { kind: 'array', rows: number }
+   * )} variant
+   * @returns {ArrayBuffer}
+   */
+  createArrayBuffer(variant) {
+    switch (variant.kind) {
+      case 'struct':
+        return new ArrayBuffer(this.#stride);
+      case 'array':
+        return new ArrayBuffer(this.#stride * variant.rows);
+      default:
+        throw new Unreachable(variant);
+    }
+  }
+
+  /** @param {{ name: string, type: GpuType }[]} fields */
+  static create(fields) {
+    return new MemoryLayout(fields, MemoryLayout.computeStride(fields));
+  }
+
+  /** @param {{ name: string, type: GpuType }[]} fields */
+  static computeStride(fields) {
+    let stride = 0, maxAlignment = 1;
+
+    for (const field of fields) {
+      const fieldSize = sizeOf(field.type);
+      const alignment = alignmentOf(field.type);
+      maxAlignment = Math.max(maxAlignment, alignment);
+      stride = (Math.ceil(stride / alignment) * alignment) + fieldSize;
+    }
+
+    return Math.ceil(stride / maxAlignment) * maxAlignment;
+  }
+}
 
 /**
  * Reads a cell from a table of data with an
@@ -169,17 +232,13 @@ export function alignmentOf(t) {
  * @returns {any}
  */
 function readCell(df, row, col) {
-  try {
-    switch (df.kind) {
-      case 'rows': return df.rows[row][col];
-      case 'cols': return df.cols[col][row];
-      default: throw new Unreachable(df);
-    }
-  } catch (e) {
-    console.error(row, col, df);
-    throw new df;
+  switch (df.kind) {
+    case 'rows': return df.rows[row][col];
+    case 'cols': return df.cols[col][row];
+    default: throw new Unreachable(df);
   }
 }
+
 
 /**
  * Write to a cell from a table of data with an
@@ -207,7 +266,7 @@ function writeCell(df, row, col, value) {
  * Writes structured data to an ArrayBuffer with proper alignment
  * @param {{
  *   arrayBuffer: ArrayBuffer,
- *   layout: { name: string, type: GpuType }[],
+ *   layout: MemoryLayout,
  *   data: DataFrame,
  *   writeTo: number,
  *   readFrom: number,
@@ -227,7 +286,7 @@ export function writeStructuredData({
 
   let offset = writeTo;
 
-  for (const field of layout) {
+  for (const field of layout.fields) {
     const fieldSize = sizeOf(field.type);
     const alignment = alignmentOf(field.type);
     offset = Math.ceil(offset / alignment) * alignment;
@@ -276,7 +335,7 @@ export function writeStructuredData({
  * Reads structured data from an ArrayBuffer with proper alignment
  * @param {{
  *   arrayBuffer: ArrayBuffer,
- *   layout: { name: string, type: GpuType }[],
+ *   layout: MemoryLayout,
  *   data: DataFrame,
  *   readFrom: number,
  *   writeTo: number,
@@ -296,7 +355,7 @@ export function readStructuredData({
 
   let offset = readFrom;
 
-  for (const field of layout) {
+  for (const field of layout.fields) {
     const fieldSize = sizeOf(field.type);
     const alignment = alignmentOf(field.type);
     offset = Math.ceil(offset / alignment) * alignment;
@@ -362,29 +421,19 @@ export function readStructuredData({
  * @param {{
  *   rows: number,
  *   data: DataFrame,
- *   layout: FieldDescriptor[],
+ *   layout: MemoryLayout,
  * }} config
  * @returns {ArrayBuffer}
  */
 export function createContiguousArray({ rows, data, layout }) {
-  let stride = 0, maxAlignment = 1;
-
-  for (const field of layout) {
-    const fieldSize = sizeOf(field.type);
-    const alignment = alignmentOf(field.type);
-    maxAlignment = Math.max(maxAlignment, alignment);
-    stride = (Math.ceil(stride / alignment) * alignment) + fieldSize;
-  }
-
-  stride = Math.ceil(stride / maxAlignment) * maxAlignment;
-  const arrayBuffer = new ArrayBuffer(rows * stride);
+  const arrayBuffer = new ArrayBuffer(rows * layout.stride);
 
   for (let i = 0; i < rows; i++) {
     writeStructuredData({
       arrayBuffer,
       layout,
       data,
-      writeTo: i * stride,
+      writeTo: i * layout.stride,
       readFrom: i,
     });
   }
@@ -396,7 +445,7 @@ export function createContiguousArray({ rows, data, layout }) {
 /**
  * @param {{
  *   rows: Record<string, any>[],
- *   layout: FieldDescriptor[],
+ *   layout: MemoryLayout,
  * }} config
  * @returns {ArrayBuffer}
  */
@@ -409,15 +458,14 @@ export function createContiguousArrayFromRows({ rows, layout }) {
 }
 
 export class UniformAdapter {
-  /** @type {GPUBuffer | undefined} */
-  #_internalBuffer = undefined;
+  /** @type {GPUBuffer | undefined} */ #_internalBuffer = undefined;
 
   /**
-   * @param {{ name: string, type: GpuType }[]} uniforms
+   * @param {MemoryLayout} layout
    * @param {Record<string, any>} state
    */
-  constructor(uniforms, state) {
-    this.uniforms = uniforms;
+  constructor(layout, state) {
+    this.layout = layout;
     this.state = state;
   }
 
@@ -432,20 +480,15 @@ export class UniformAdapter {
       state[name] = init;
       uniforms.push({ name, type });
     }
-    return new UniformAdapter(uniforms, state);
+    return new UniformAdapter(MemoryLayout.create(uniforms), state);
   }
 
   /**
-   * @returns {number}
+   * @param {MemoryLayout} layout
+   * @param {Record<string, any>} [state]
    */
-  get bufferSize() {
-    let offset = 0;
-    for (const uniform of this.uniforms) {
-      const alignment = alignmentOf(uniform.type);
-      offset = Math.ceil(offset / alignment) * alignment;
-      offset += sizeOf(uniform.type);
-    }
-    return Math.ceil(offset / 16) * 16;
+  static fromLayout(layout, state = {}) {
+    return new UniformAdapter(layout, state);
   }
 
   /**
@@ -460,7 +503,7 @@ export class UniformAdapter {
    * @param {GPUDevice} device
    */
   updateBuffer(device) {
-    const arrayBuffer = new ArrayBuffer(this.bufferSize);
+    const arrayBuffer = new ArrayBuffer(this.layout.stride);
     this.writeToArrayBuffer(arrayBuffer);
     const internalBuffer = this.getBuffer(device);
     device.queue.writeBuffer(internalBuffer, 0, arrayBuffer);
@@ -472,7 +515,7 @@ export class UniformAdapter {
   writeToArrayBuffer(arrayBuffer) {
     writeStructuredData({
       arrayBuffer,
-      layout: this.uniforms,
+      layout: this.layout,
       data: { kind: 'rows', rows: [this.state] },
       writeTo: 0,
       readFrom: 0,
@@ -486,7 +529,7 @@ export class UniformAdapter {
   getBuffer(device) {
     if (this.#_internalBuffer == null) {
       this.#_internalBuffer = device.createBuffer({
-        size: this.bufferSize,
+        size: this.layout.stride,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
     }
@@ -503,11 +546,11 @@ export class OutputBufferAdapter {
     this.#gpuBuffer = gpuBuffer;
   }
 
-  static create(device, size) {
+  static create(device, rows, layout) {
     const { COPY_DST, COPY_SRC, STORAGE } = GPUBufferUsage;
-    const cpuBuffer = new Float32Array(new Array(size).fill(0));
+    const cpuBuffer = new ArrayBuffer(layout.stride * rows);
     const gpuBuffer = device.createBuffer({
-      size: size * Float32Array.BYTES_PER_ELEMENT,
+      size: layout.stride * rows,
       usage: GPUBufferUsage.STORAGE | COPY_SRC | COPY_DST,
     });
     device.queue.writeBuffer(gpuBuffer, 0, cpuBuffer);
@@ -515,7 +558,7 @@ export class OutputBufferAdapter {
   }
 
   get cpuBuffer () {
-    return this.#cpuBuffer;
+    return new Float32Array(this.#cpuBuffer);
   }
 
   get gpuBuffer () {
@@ -523,9 +566,9 @@ export class OutputBufferAdapter {
   }
 
   createMapping(device, commandEncoder) {
-    const bufferSize = this.#cpuBuffer.length * Float32Array.BYTES_PER_ELEMENT;
+    const bufferSize = this.#cpuBuffer.byteLength;
     const stagingBuffer = device.createBuffer({
-      size: bufferSize,
+      size: this.#cpuBuffer.byteLength,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
 
@@ -533,7 +576,9 @@ export class OutputBufferAdapter {
 
     const read = async () => {
       await stagingBuffer.mapAsync(GPUMapMode.READ);
-      this.#cpuBuffer.set(new Float32Array(stagingBuffer.getMappedRange()));
+      const cpuF = new Float32Array(this.#cpuBuffer);
+      const gpuF = new Float32Array(stagingBuffer.getMappedRange());
+      cpuF.set(gpuF);
       stagingBuffer.unmap();
     };
 

@@ -1,8 +1,22 @@
 import {
   UniformAdapter,
   OutputBufferAdapter,
+  MemoryLayout,
   readStructuredData,
 } from '@common/webgpu/buffer.js';
+
+const layouts = {
+  config: MemoryLayout.create([
+    { type: 'vec3<u32>', name: 'grid' },
+    { type: 'vec3<u32>', name: 'wg' },
+  ]),
+  output: MemoryLayout.create([
+    { type: 'vec3<u32>', name: 'global_id' },
+    { type: 'vec3<u32>', name: 'local_id' },
+    { type: 'vec3<u32>', name: 'workgroup_id' },
+    { type: 'u32', name: 'local_invocation_index' },
+  ]),
+};
 
 const OUTPUT_STRIDE = 1*(3*4) + 3*(4 * 4);
 const COMPUTE_SHADER_URL = import.meta.resolve('./shader.wgsl');
@@ -66,7 +80,7 @@ class Config {
   }
 }
 
-function * bufferRows(buffer, stride, layout, rows) {
+function * bufferRows(buffer, layout, rows) {
   let readFrom = 0;
   for (let i = 0; i < rows; i++) {
     const row = {};
@@ -170,10 +184,7 @@ async function createPipeline(device, config) {
   const code = config.replaceWorkgroup(await response.text());
   const shader = await device.createShaderModule({ code });
 
-  const uniform = UniformAdapter.create([
-    { type: 'vec3<u32>', name: 'grid' },
-    { type: 'vec3<u32>', name: 'wg' },
-  ]);
+  const uniform = UniformAdapter.fromLayout(layouts.config);
 
   const { workgroupSizes: wgs, grid } = config;
   uniform.update('grid', [grid.x, grid.y, grid.z]);
@@ -181,7 +192,7 @@ async function createPipeline(device, config) {
 
   uniform.updateBuffer(device);
 
-  const output = OutputBufferAdapter.create(device, OUTPUT_STRIDE * config.rows());
+  const output = OutputBufferAdapter.create(device, config.rows(), layouts.output);
 
   const pipeline = device.createComputePipeline({
     layout: 'auto',
@@ -204,12 +215,7 @@ async function readOutput(device, config, commandEncoder, output) {
   device.queue.submit([commandEncoder.finish()]);
   await mapping.read();
 
-  return Array.from(bufferRows(output.cpuBuffer.buffer, OUTPUT_STRIDE, [
-    { type: 'vec3<u32>', name: 'global' },
-    { type: 'vec3<u32>', name: 'local' },
-    { type: 'vec3<u32>', name: 'workgroup' },
-    { type: 'u32', name: 'local_invocation_index' },
-  ], config.rows()));
+  return Array.from(bufferRows(output.cpuBuffer.buffer, layouts.output, config.rows()));
 }
 
 async function getGPU() {
@@ -229,15 +235,15 @@ function showOutputTable(results) {
 
   const colHeaders = [
     { colSpan: 1, label: 'ID' },
-    { colSpan: 1, label: 'x', read: ['global', 0] },
-    { colSpan: 1, label: 'y', read: ['global', 1] },
-    { colSpan: 1, label: 'z', read: ['global', 2] },
-    { colSpan: 1, label: 'x', read: ['local', 0] },
-    { colSpan: 1, label: 'y', read: ['local', 1] },
-    { colSpan: 1, label: 'z', read: ['local', 2] },
-    { colSpan: 1, label: 'x', read: ['workgroup', 0] },
-    { colSpan: 1, label: 'y', read: ['workgroup', 1] },
-    { colSpan: 1, label: 'z', read: ['workgroup', 2] },
+    { colSpan: 1, label: 'x', read: ['global_id', 0] },
+    { colSpan: 1, label: 'y', read: ['global_id', 1] },
+    { colSpan: 1, label: 'z', read: ['global_id', 2] },
+    { colSpan: 1, label: 'x', read: ['local_id', 0] },
+    { colSpan: 1, label: 'y', read: ['local_id', 1] },
+    { colSpan: 1, label: 'z', read: ['local_id', 2] },
+    { colSpan: 1, label: 'x', read: ['workgroup_id', 0] },
+    { colSpan: 1, label: 'y', read: ['workgroup_id', 1] },
+    { colSpan: 1, label: 'z', read: ['workgroup_id', 2] },
     { colSpan: 1, label: 'LII', read: 'local_invocation_index' },
   ];
 
